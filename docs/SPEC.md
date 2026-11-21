@@ -315,13 +315,15 @@ bill. Always-free and cheap SKUs are preferred; costly labs are **Optional**
 #### Budget alerts (A02)
 
 In A02, create a **low monthly budget** on the personal lab subscription, in the
-range **$10–$25 per month**, with alerts at **50%, 80%, and 100%** of both
-**Actual** and **Forecasted** cost, sent to Nathan's personal email (not a work
-address). Official tutorial:
+range **$10–$25 per month**, with five notifications (an Azure budget allows at
+most five): **Actual** cost at **50%, 80%, and 100%**, plus **Forecasted** cost at
+**80% and 100%**. There is no sixth slot for a Forecasted 50% alert. Send them to
+Nathan's personal email (not a work address). Official tutorial:
 <https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets>.
 This `[LAB]` is the gate for every later live lab. `lab-up.ps1` refuses to deploy
-later labs until it can see that budget (or until an explicit, loudly logged
-override is set).
+later resource labs until it can see a subscription budget whose name matches
+`.lab-env.json` `budget.name` and whose amount is greater than 0 (or until an
+explicit, loudly logged override is set). Details are in section 10.3.
 
 #### Deloitte / work-tenant isolation guardrails
 
@@ -344,7 +346,7 @@ directory. Concrete steps, all of them required:
    `az login --tenant <personal-tenant-id>` and `az account set --subscription
    <personal-subscription-id>`, then look again.
 3. A **gitignored** `.lab-env.json` at the repo root, created locally (never
-   committed), pinning at least:
+   committed) from `.lab-env.example.json`. Required pins:
 
    ```json
    {
@@ -357,6 +359,20 @@ directory. Concrete steps, all of them required:
    `expectedTenantId` is the personal Default Directory used for resource labs.
    `expectedEntraTenantId` is the disposable A05 test tenant, and is **not** the
    personal Default Directory.
+
+   The same file also carries (defaults in parentheses):
+
+   - `prefix` (`lagb`), `location` (`eastus`), `owner` (`n8`)
+   - `budget.name` (`lagb-monthly`): name of the A02 subscription budget. The
+     budget gate looks for exactly this name.
+   - `budget.amount` (`25`): monthly amount the A02 deployment uses. The gate does
+     **not** compare against this field; it only requires the found budget's amount
+     to be greater than 0.
+   - `budget.contactEmail`: required for A02; the address the budget alerts and the
+     action group email (Nathan's personal address, not a work address).
+   - `guardrails.resourceGroup` (`lagb-guardrails`): the persistent group that
+     holds the budget's action group (section 10.3). Keep the name under `<prefix>-`
+     so `lab-down -IncludePersistent` can still select it.
 
    An optional `allowedCustomDomains` list names verified custom domains that are
    yours (for example `skopekreep.com` if you add it to the tenant). An optional
@@ -660,14 +676,23 @@ and is a prerequisite for every later `[LAB]`.
   resources cost money if left running.
 - **Portal / CLI-only:** reading Advisor recommendations; inspecting budget status in the
   portal or with CLI.
-- **Targets:** 5 exercises, 2 drills. **Required `[LAB]`:** this is the course's **first
-  live deploy**. Deploy the course budget and action group (and, if authors choose, the
-  SKU/region restrictive Policy) into the lab subscription or the lab resource-group
-  scope. The same lab **may also deploy a small A01-style template**, and it **includes
-  a live export of that deployment as ARM JSON or Bicep**, so the official export bullet
-  is covered as A01 offline compile/decompile plus A02 live export. This exercise is the
-  gate for every later `[LAB]`. Recommended budget: **$10–$25 per month**, with alerts at
-  **50%, 80%, and 100%** of both **Actual** and **Forecasted** cost (section 3.2).
+- **Targets:** 5 exercises, 2 drills. **Required `[LAB]` (`A02-e01`):** this is the
+  course's **first live deploy**. The exercise ships an `up.ps1` that `lab-up` runs, and
+  that script runs `az deployment sub create`. The template deploys a subscription-scope
+  `Microsoft.Consumption/budgets@2024-08-01` named from `.lab-env.json` `budget.name`
+  (default `lagb-monthly`), monthly, amount in the **$10–$25** range (`budget.amount`,
+  default `25`), with five notifications (the per-budget maximum Azure allows):
+  **Actual** 50/80/100% and **Forecasted** 80/100%, emailed to `budget.contactEmail`
+  and an action group. The action group lives in a **persistent** resource group,
+  `guardrails.resourceGroup` (default `lagb-guardrails`), tagged `course`,
+  `unit=a02-cost-and-guardrails`, `exercise`, `lifecycle=persistent`, and `owner`,
+  with **no** `expires`. `lab-down` skips that group unless `-IncludePersistent` is
+  passed; `lab-sweep` lists it as expected, and it does not count toward exit 1.
+  Authors may also include a SKU/region restrictive Policy, or a small A01-style
+  template, in this or a later A02 exercise. Live export of the budget deployment
+  uses `az deployment sub export` (ARM JSON or Bicep), so the official export bullet
+  is covered as A01 offline compile/decompile plus A02 live export. This exercise is
+  the gate for every later `[LAB]` (section 10.3).
 - **Notes:** This is "unit 1" in the operational sense: the first subscription-backed work,
   placed immediately after the student can author a deployment offline, and before any
   unit that creates disks, public IPs, Bastion, or vaults. Isolation checks
@@ -1042,7 +1067,7 @@ unit that teaches it; capstones reuse but do not replace that unit.
 | Modify an existing ARM template | A01 | `[MODIFY]` on ARM JSON |
 | Modify an existing Bicep file | A00, A01 | `[MODIFY]` |
 | Deploy resources by using an ARM template or a Bicep file | A02 (first live), later `[LAB]`s | A01 is offline only (author, validate, what-if fixture). First live deploy is the A02 budget / action-group `[LAB]`, which may include a small A01-style template |
-| Export a deployment as an ARM template or compile a deployment as a Bicep file | A01, A02 | A01: offline `bicep build` / decompile from a fixture or a compiled template. A02: live export of the budget-lab deployment as ARM or Bicep |
+| Export a deployment as an ARM template or compile a deployment as a Bicep file | A01, A02 | A01: offline `bicep build` / decompile from a fixture or a compiled template. A02: live export of the budget-lab subscription deployment with `az deployment sub export` |
 | Create a virtual machine | A12 | Bicep `[WRITE]` + optional `[LAB]` |
 | Configure Azure Disk Encryption | A12 | Bicep and/or `[EXPLAIN]` / `[LAB]` |
 | Move a virtual machine to another resource group, subscription, or region | A12 | `[CLI]` / `[PORTAL]` `[LAB]` |
@@ -1114,6 +1139,7 @@ LearnAzureByGrinding/
 ├── bicepconfig.json          linter settings for the whole repo
 ├── ps-rule.yaml              PSRule.Rules.Azure, including Bicep expansion
 ├── .gitignore
+├── .lab-env.example.json  copy to gitignored `.lab-env.json`
 ├── .github/workflows/ci.yml
 ├── docs/
 │   ├── SPEC.md               this file
@@ -1133,7 +1159,8 @@ LearnAzureByGrinding/
 │   └── lab/                  lab-up.ps1, lab-down.ps1, lab-sweep.ps1 (live Azure only)
 ├── lib/
 │   ├── AzGrinding.psd1 / .psm1    shared Pester helpers, assert conventions, id printing
-│   └── templates/            author-only skeletons (exercise.psd1, write/modify/cli-drill tests)
+│   └── templates/            author-only skeletons (exercise.psd1, write/modify/cli-drill tests;
+│                             A02 subscription-scope `up.sub-scope.ps1` / `.bicep` / action-group)
 ├── units/aNN-<slug>/         LESSON.md, eNN-<slug>/, drills/rNN-<slug>/, lesson-demo/
 ├── capstones/cN-<name>/     LESSON.md or README, eNN-<slug>/ (same format as units)
 └── solutions/                mirrors units/ (including drills/) and capstones/
@@ -1144,8 +1171,9 @@ compiled `*.json` next to a `.bicep` unless the exercise ships a fixture, `reps/
 `.psrule/`, Pester test results) are gitignored. The local pin file `.lab-env.json`
 and `*.local.bicepparam` are gitignored and must never be committed. verify-all and
 local scripts write under a temp directory or a gitignored `out/`, then clean it.
-Optional costly labs add an `up.bicep` in the exercise folder (section 10.7); those
-files are authored with the unit, not in this spec-only drop.
+Optional costly labs add an `up.bicep` in the exercise folder (section 10.7).
+`A02-e01` ships an `up.ps1` that runs `az deployment sub create` (section 10.3).
+Those files are authored with the unit, not in this spec-only drop.
 
 This Phase 1 drop is **the spec and a short README only.** The other paths are named here
 so Phase 1 infra and Phase 2 authors share one layout. They are not created in this drop.
@@ -1398,9 +1426,9 @@ Phase 1 infra implements this section. The behaviour below is the acceptance bar
 | `pwsh -File scripts/psrule.ps1` | PSRule (`Azure.Pillar.Security.L1`) over solutions and lesson-demos |
 | `pwsh -File scripts/selftest.ps1` | throwaway fixtures that prove scaffold-fail, solution-pass, fidelity, and skip policy |
 | `pwsh -File scripts/rep.ps1 <path>` | fresh copy into gitignored `reps/` |
-| `pwsh -File scripts/lab/lab-up.ps1 -Path <exercise>` | checks `.lab-env.json` and the A02 cost-guard, then deploys if the exercise is a `[LAB]` |
-| `pwsh -File scripts/lab/lab-down.ps1 -Path <exercise>` | deletes the matching course-tagged lab resource group; prints soft-delete warnings |
-| `pwsh -File scripts/lab/lab-sweep.ps1` | *lists* leftover course-tagged groups and resources; list-only |
+| `pwsh -File scripts/lab/lab-up.ps1 -Path <exercise>` | checks `.lab-env.json` and the A02 budget gate (before `up.ps1`), then deploys if the exercise is a `[LAB]` |
+| `pwsh -File scripts/lab/lab-down.ps1 -Path <exercise>` | deletes matching course-tagged lab groups; skips `lifecycle=persistent` unless `-IncludePersistent`; prints soft-delete warnings |
+| `pwsh -File scripts/lab/lab-sweep.ps1` | *lists* leftover course-tagged groups and resources; persistent/expected groups do not count toward exit 1 |
 
 CI runs lint, selftest, verify-all (without `-RequireItems` until the first unit lands),
 `psrule.ps1`, and a dirty-tree check. It never runs the lab scripts.
@@ -1531,17 +1559,41 @@ Every lab resource (and every lab resource group) carries:
 
 Names use a short prefix (`lagb-` unless Phase 1 picks another) plus a unique suffix so
 two exercises do not collide. `lab-down` and `lab-sweep.ps1` select by the `course` tag first,
-then by unit or prefix.
+then by unit or prefix. The A02 guardrails group uses the same tags minus `expires`,
+plus `lifecycle=persistent` (section 10.3); it is not a same-day lab group.
 
 ### 10.3 Budget gate
 
-A02 contains a `[LAB]` that deploys a monthly **budget** and an **action group** (email
-to the personal MSA address, not a work address) at the lab subscription or a clearly
-documented scope. Recommended amount: **$10–$25 per month**, with alerts at **50%, 80%,
-and 100%** of both **Actual** and **Forecasted** cost.
-`lab-up` refuses to deploy any later `[LAB]` until it can see that budget (or until
-Nathan sets an explicit override that the script logs loudly), and it refuses if the
-active tenant does not match `.lab-env.json` or looks corporate.
+A02-e01 is a `[LAB]` that ships an `up.ps1`. `lab-up` runs that script, and the script
+runs `az deployment sub create`. The template deploys:
+
+- A subscription-scope `Microsoft.Consumption/budgets@2024-08-01` named `.lab-env.json`
+  `budget.name` (default `lagb-monthly`), monthly, `Cost`, amount in the **$10–$25**
+  range (`budget.amount`, default `25`).
+- Five notifications, the per-budget maximum Azure allows: **Actual** 50/80/100% and
+  **Forecasted** 80/100%. There is no sixth slot for a Forecasted 50% alert. Each
+  notification emails `budget.contactEmail` (the personal MSA address, not a work
+  address) and an action group.
+- The action group in a **persistent** resource group, `guardrails.resourceGroup`
+  (default `lagb-guardrails`), tagged `course`, `unit=a02-cost-and-guardrails`,
+  `exercise`, `lifecycle=persistent`, and `owner`, with **no** `expires` tag.
+
+`lab-down` never deletes a group tagged `lifecycle=persistent` unless
+`-IncludePersistent` is passed; it prints that it skipped the group and continues.
+`lab-sweep` lists that group (and resources in it) as expected; they do not count
+toward exit 1. Exit 1 is only for unexpected leftovers.
+
+The budget gate runs in `lab-up` **before** the `up.ps1` branch, for every
+resource-scope lab **outside A02** (A02 is exempt because it creates the budget;
+A05 Entra-scope labs do not run the gate). It checks only that
+`az consumption budget list` (subscription scope) returns a budget whose `name`
+equals `budget.name` and whose `amount` is greater than 0. It does **not** check
+notifications, thresholds, Forecasted alerts, the action group, or that the amount
+matches `budget.amount`. A resource-group-scope budget is not seen. If the gate
+fails, `lab-up` exits 3 and prints the fix (do the A02 budget lab, or
+`-BudgetOverride`). `-BudgetOverride` deploys anyway and prints a loud warning
+banner. `lab-up` still refuses if the active tenant does not match `.lab-env.json`
+or looks corporate (section 3.2).
 
 A02 also covers Advisor and, if authors put it here rather than A04, an Azure Policy that
 restricts lab SKUs and regions (for example: one or two cheap regions, B-series or a short
@@ -1571,9 +1623,12 @@ or `[EXPLAIN]` for ASR failover.
 
 - `scripts/lab/lab-down.ps1` deletes the matching course-tagged resource group (or the
   resources for a path, unit, or tag set). It is the last step of every `[LAB]` README.
+  A group tagged `lifecycle=persistent` (the A02 guardrails group) is skipped unless
+  `-IncludePersistent` is passed.
 - `scripts/lab/lab-sweep.ps1` *lists* every remaining course-tagged resource group and
   resource in the lab subscription, with name, type, region, and the `expires` tag.
-  It is list-only.
+  It is list-only. Persistent/expected groups are listed separately and do not count
+  toward exit 1.
 - Authors never commit a state file that contains a subscription ID or a secret. Parameter
   files in the repo use placeholders; students keep local `*.local.bicepparam` (gitignored)
   if needed.
@@ -1596,14 +1651,20 @@ same-day, guarded `[LAB]` with its own teardown.
 - Each optional costly lab ships an `up.bicep` (and a matching `.bicepparam` with
   placeholders) that deploys only that lab's resources into a **dedicated, course-tagged
   resource group** (tags in section 10.2, prefix `lagb-`).
-- `scripts/lab/lab-up.ps1` checks `.lab-env.json` (section 3.2), checks the A02 budget
-  gate, creates or reuses that RG, and deploys `up.bicep`. It refuses to run on a
-  tenant/subscription mismatch or a corporate-looking tenant.
+- `scripts/lab/lab-up.ps1` checks `.lab-env.json` (section 3.2) and the A02 budget
+  gate **before** `up.ps1` or `up.bicep`, for every resource lab outside A02. The gate
+  checks only the budget's name and amount > 0 (section 10.3). For a typical costly
+  lab it then creates or reuses that RG and deploys `up.bicep`. If the exercise ships
+  `up.ps1` (A02-e01), that script runs instead and the script itself runs
+  `az deployment sub create`. `lab-up` refuses to run on a tenant/subscription
+  mismatch or a corporate-looking tenant.
 - `scripts/lab/lab-down.ps1` deletes that RG (or the tagged resources) and **prints
   soft-delete / purge warnings** before it returns success: Recovery Services vaults,
   backup items, Key Vaults, and similar resources can linger in a soft-deleted state
   and block a clean delete. The script tells the student what to purge and how, and
-  `scripts/lab/lab-sweep.ps1` still lists leftovers.
+  `scripts/lab/lab-sweep.ps1` still lists leftovers. The persistent A02 guardrails
+  group is skipped unless `-IncludePersistent` is passed; lab-sweep lists it as
+  expected, and it does not count toward exit 1.
 - Leaving Bastion Basic/Standard, a public IP, an App Service plan, a Recovery Services
   vault with a protected instance, or Site Recovery replication running is how a "two
   hour" lab becomes a monthly bill. Tear down the same day.
@@ -1784,7 +1845,8 @@ record (and are written into the sections they affect):
    Azure subscription (Free Account if still eligible, otherwise PAYG) for resource
    labs A00–A04 and A06–A17. Create a dedicated disposable Entra ID Workforce test
    tenant, in the same portal, for A05 only. A02 deploys a $10–$25/month budget with
-   50%, 80%, and 100% Actual and Forecasted alerts. Isolation guardrails (separate
+   five notifications: Actual 50/80/100% and Forecasted 80/100% (the per-budget
+   maximum). Isolation guardrails (separate
    browser profile, `az account` checks, `az login --tenant`, gitignored
    `.lab-env.json`, hard refuse in `lab-up` / `lab-down`) are required. Details
    are in section 3.2.
@@ -1892,6 +1954,16 @@ The short list is in the 0.3 changelog.
   refusal also covers non-allowlisted custom domains and the signed-in user name;
   the course root is `lib/AzGrinding.psd1`; students use `scripts/check.ps1`, and
   pins live in `scripts/toolchain.psd1` (`scripts/install-tools.ps1`, `lib/templates/`).
+
+  A02 guardrails and budget notifications, aligned with infra PR #3 (`7b57240`):
+  an Azure budget allows at most five notifications, so alerts are Actual 50/80/100%
+  plus Forecasted 80/100%; A02-e01 ships `up.ps1` (`az deployment sub create`) for a
+  subscription-scope `Microsoft.Consumption/budgets@2024-08-01` named `budget.name`
+  (default `lagb-monthly`); the action group lives in the persistent
+  `guardrails.resourceGroup` (default `lagb-guardrails`); lab-down skips that group
+  unless `-IncludePersistent`; lab-sweep lists it as expected (not exit 1); the
+  budget gate runs before `up.ps1` on every resource lab outside A02 and checks only
+  the budget's name and amount > 0; live export uses `az deployment sub export`.
 
 - 0.2 (20 November 2026): Nathan's decisions applied. Beginner tenant and subscription
   setup (personal MSA Default Directory, disposable A05 Entra test tenant, Free vs
