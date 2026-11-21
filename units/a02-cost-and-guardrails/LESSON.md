@@ -87,7 +87,7 @@ The budget tracks spending monthly. When actual cost reaches 80% or forecasted c
 
 ### The A02 lab and exporting a subscription-scoped deployment
 
-Exercise e01 deploys the budget and action group at subscription scope through an `up.ps1` script into a **persistent** resource group (`.lab-env.json` `guardrails.resourceGroup`, default `lagb-guardrails`). That resource group is tagged `course=LearnAzureByGrinding`, `unit=a02-cost-and-guardrails`, `exercise=<the A02 exercise id>`, `lifecycle=persistent`, `owner=<owner>` (no `expires` tag). The budget gate runs before `up.ps1` for every resource lab outside A02; A02 itself is exempt from that gate (the budget does not exist until e01 deploys it). `lab-down` skips persistent groups unless `-IncludePersistent` is given, and `lab-sweep` lists them as expected without counting toward exit 1.
+Exercise e01's `up.ps1` creates the **persistent** guardrails resource group (`.lab-env.json` `guardrails.resourceGroup`, default `lagb-guardrails`), tagged `course=LearnAzureByGrinding`, `unit=a02-cost-and-guardrails`, `exercise=<the A02 exercise id>`, `lifecycle=persistent`, `owner=<owner>` (no `expires` tag), then runs `az deployment sub create` for the subscription-scope budget deployment. The budget gate runs before `up.ps1` for every resource lab outside A02; A02 itself is exempt from that gate (the budget does not exist until e01 deploys it). `lab-down` skips persistent groups unless `-IncludePersistent` is given, and `lab-sweep` lists them as expected without counting toward exit 1.
 
 After deployment, export the subscription-scoped deployment with:
 
