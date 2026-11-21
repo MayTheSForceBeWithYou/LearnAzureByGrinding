@@ -25,7 +25,7 @@ If you exceed the budget, Azure does not stop your resources. A budget is a moni
 
 ### Budgets and action groups
 
-A **budget** tracks spending and defines alert thresholds. An **action group** defines notification targets (e.g., email addresses). When spending crosses a threshold, the budget sends an alert via the action group. Budgets are subscription-scoped or resource-group-scoped. Action groups are resource-group-scoped. The budget references the action group by resource ID.
+A **budget** tracks spending and defines alert thresholds. An **action group** defines notification targets (e.g., email addresses). When spending crosses a threshold, the budget sends an alert via the action group. Budgets can be deployed at subscription, management-group, or billing-account scope (the course budget is subscription scope, and the `lab-up` gate only sees the subscription-scope budget named `.lab-env.json` `budget.name`). Action groups are resource-group-scoped. The budget references the action group by resource ID.
 
 ### Deploying a budget
 
@@ -83,9 +83,11 @@ resource budget 'Microsoft.Consumption/budgets@2023-11-01' = {
 
 The budget tracks spending monthly. When actual cost reaches 80% or forecasted cost reaches 100%, Azure sends an alert to the action group. The action group (resource type `Microsoft.Insights/actionGroups@2023-01-01`) is a separate resource that holds email addresses or other notification targets.
 
+**Note on `startDate`:** A redeploy in a later month changes `utcNow('yyyy-MM-01')`. Pass the original start date when redeploying, or leave the budget alone after the first deploy.
+
 ### The A02 lab and exporting a subscription-scoped deployment
 
-Exercise e01 deploys the budget and action group at subscription scope through an `up.ps1` script into a **persistent** resource group (`.lab-env.json` `guardrails.resourceGroup`, default `lagb-guardrails`). That resource group is tagged `course=LearnAzureByGrinding`, `unit=a02`, `lifecycle=persistent` (no `expires` tag). `lab-up` runs the guards first. `lab-down` skips persistent groups unless `-IncludePersistent` is given, and `lab-sweep` lists them as expected.
+Exercise e01 deploys the budget and action group at subscription scope through an `up.ps1` script into a **persistent** resource group (`.lab-env.json` `guardrails.resourceGroup`, default `lagb-guardrails`). That resource group is tagged `course=LearnAzureByGrinding`, `unit=a02-cost-and-guardrails`, `lifecycle=persistent` (no `expires` tag). `lab-up` runs the guards first. `lab-down` skips persistent groups unless `-IncludePersistent` is given, and `lab-sweep` lists them as expected.
 
 After deployment, export the subscription-scoped deployment with:
 
@@ -99,15 +101,15 @@ This parallels A01's `az deployment group export` for resource-group-scoped depl
 
 ### Lab resource tagging
 
-Every lab resource and resource group carries five tags:
+Every lab resource and resource group carries five tags (exception: the persistent guardrails group has `lifecycle=persistent` and no `expires` tag):
 
 | Tag | Value format | Example |
 |-----|--------------|---------|
 | `course` | `LearnAzureByGrinding` (literal) | `LearnAzureByGrinding` |
 | `unit` | Unit folder name | `a02-cost-and-guardrails` |
 | `exercise` | Full exercise id | `a02-e01-budget-and-action-group` |
-| `expires` | UTC timestamp `yyyy-MM-ddTHH:mm:ssZ`, written by `New-LabTags`, default now plus 8 hours | `2026-11-21T20:30:00Z` |
-| `owner` | Your short username | `n8` |
+| `expires` | UTC timestamp `yyyy-MM-ddTHH:mm:ssZ`, written by `New-LabTags`, default now plus 8 hours (`-ExpiresInHours` flag) | `2026-11-21T20:30:00Z` |
+| `owner` | Your username | `student` |
 
 `lab-up` puts these five tags on the resource group it creates. `lab-down` selects **resource groups** by the `course` tag, name prefix, and `unit` tag (plus `exercise` with `-Path`), then runs `az group delete`. That removes every resource in the group, regardless of the resource's own tags.
 
@@ -119,7 +121,15 @@ Read recommendations in the portal or with `az advisor recommendation list --out
 
 ### Account isolation
 
-The lab environment is recorded in `.lab-env.json` at the repository root (tenant ID and subscription ID). Before a lab, run `az account show` to confirm the active account matches. If not, sign in: `az login --tenant <tenant-id>` and `az account set --subscription <subscription-id>`. The `lab-up` script enforces this to prevent deploying into a work subscription by mistake.
+The lab environment is recorded in `.lab-env.json` at the repository root (`expectedTenantId`, `expectedSubscriptionId`, and `expectedEntraTenantId`). Before a lab, run `az account show` to confirm the active account matches. If not, sign in: `az login --tenant <tenant-id>` and `az account set --subscription <subscription-id>`. The `lab-up` script enforces this to prevent deploying into a work subscription by mistake, and it refuses if the tenant looks corporate.
+
+To check the budget that gates later labs, run:
+
+```bash
+az consumption budget list --output table
+```
+
+This is the lookup `lab-up` uses to find the subscription-scope budget named `.lab-env.json` `budget.name`.
 
 ### What costs money if left running
 
@@ -130,14 +140,14 @@ Resources that cost money when idle:
 - Managed disks: bill by size, even if unattached.
 - Recovery Services vaults: the protected-instance meter bills (about $10/month per VM), and soft delete **blocks vault deletion** for 14 days (the soft-delete storage itself is not billed).
 - App Service plans: Free tier is free; Basic and above bill even if empty.
-- Load balancers: bill if they have a public IP.
+- Load balancers: Standard Load Balancers bill hourly once they have rules, whether or not they have a public IP (the IP bills separately).
 - Site Recovery and cross-region replication: bill continuously.
 
 Resource groups are free. Tear down every lab immediately after you verify it passes. The `lab-down` script deletes the resource group. If you keep a lab running overnight, check Advisor the next day for unexpected costs.
 
 ## Worked example: Reading an Advisor recommendation
 
-You stop a VM but do not delete it. The next day, Advisor shows a Medium-impact Cost recommendation about an unattached disk. The disk is charged by size, whether or not the VM is running. Run `lab-down` to delete the resource group, which deletes both the VM and the disk.
+You delete a VM, and its disk is left behind unattached. The next day, Advisor shows a Cost recommendation about the unattached disk. The disk is charged by size. Run `lab-down` to delete the resource group, which removes the disk.
 
 **The plausible wrong reading.** You might expect Advisor to alert immediately after you stop the VM. Advisor is not real-time; recommendations appear hours or days later. Budgets are also not real-time: cost data lags, and budget evaluation is periodic (typically daily). Forecasted budget thresholds catch runaway costs earlier than Actual thresholds, but neither alerts immediately. Advisor catches waste you forgot to clean up.
 
@@ -145,10 +155,10 @@ You stop a VM but do not delete it. The next day, Advisor shows a Medium-impact 
 
 | Confusion | What separates them |
 |-----------|---------------------|
-| Budget vs quota | A budget is a monitoring tool that sends alerts when spending crosses thresholds. A quota is a hard limit enforced by Azure (e.g., maximum number of cores per region). Budgets do not stop resources; quotas do. |
+| Budget vs quota | A budget is a monitoring tool that sends alerts when spending crosses thresholds. A quota is a hard limit enforced by Azure (e.g., maximum number of cores per region). Budgets do not stop resources; quotas block creation. |
 | Actual cost vs Forecasted cost | Actual cost is what you have spent so far in the billing period. Forecasted cost is what Azure predicts you will spend by the end of the period, based on current usage. Forecasted alerts catch runaway costs early. |
-| Action group vs alert rule | An alert rule is a condition (e.g., "cost exceeds 50%"). An action group is a set of targets (e.g., "send email to n8@example.com"). The budget defines alert rules and references an action group. The action group is reusable: multiple budgets can reference the same action group. |
-| Stopped VM vs Stopped (deallocated) VM vs deleted VM | **Stopped** (not deallocated) still bills compute, disks, and public IPs. **Stopped (deallocated)** stops the compute charge but disks and IPs keep billing. **Deleted** (by default) leaves its managed OS and data disks, NIC, and public IP in place; they keep billing. Deleting the lab's resource group (`lab-down`) removes everything. |
+| Action group vs alert rule | An alert rule is a condition (e.g., "cost exceeds 50%"). An action group is a set of targets (e.g., "send email to student@example.com"). The budget defines alert rules and references an action group. The action group is reusable: multiple budgets can reference the same action group. |
+| Stopped VM vs Stopped (deallocated) VM vs deleted VM | **Stopped** (not deallocated) still bills compute, disks, and public IPs. **Stopped (deallocated)** stops the compute charge but disks and IPs keep billing. **Deleted** (by default) leaves its managed OS and data disks, NIC, and public IP in place; they keep billing. What survives a VM delete depends on each resource's `deleteOption` (API default is Detach; portal defaults the OS disk and NIC to Delete). Deleting the lab's resource group (`lab-down`) removes everything. |
 | Resource group tags vs resource tags | A resource group can have tags, and resources in that group can have tags. The tags are independent. Setting a tag on the resource group does not set it on the resources inside. The course requires tags on both. |
 | Lab-down vs lab-sweep | `lab-down` deletes resource groups (not individual resources). `lab-sweep` is the **student's** tool: it lists every course-tagged group and resource with its expiry and cost risk, plus soft-deleted Key Vaults. It deletes nothing and exits 1 if anything is left (the A02 guardrails group is listed separately as expected and won't fail it). |
 

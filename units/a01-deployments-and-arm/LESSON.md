@@ -180,7 +180,7 @@ Decompile is useful when you export a deployment from the portal or a live resou
 
 Before you deploy, you can validate the template and preview the changes.
 
-**Validation** and **what-if** both require Azure sign-in and an existing resource group. Neither is offline.
+**Validation** and **what-if** both require Azure sign-in. For group-scope deployments, they require an existing resource group. Neither is offline.
 
 **Validation** checks that the template is well-formed, required parameters are provided, and runs provider checks and Azure Policy deny rules. At the default `--validation-level Provider` (Azure CLI 2.76+), it also checks RBAC permissions. Run it with:
 
@@ -214,7 +214,7 @@ What-if output uses symbols:
 
 What-if also shows property-level changes for Modify operations.
 
-What-if is not perfect. It is a prediction, not a guarantee. What-if does not catch all deployment failures: it checks the template structure and the current state, but it does not validate that you have permission to perform the operation or that the subscription has quota.
+What-if is not perfect. It is a prediction, not a guarantee. What-if has the same permission requirements as a deployment. It does not catch all deployment failures.
 
 ### Exporting a deployment
 
@@ -354,7 +354,7 @@ What is always lost:
 
 What may change:
 - Resource symbolic names (decompile may shorten or rename them)
-- Logical expressions (decompile may simplify or rewrite them)
+- Logical expressions (decompile may rewrite them, for example adding parentheses)
 
 What is usually preserved (but not guaranteed):
 - Parameter and variable names (they are JSON keys in the ARM template, so decompile keeps them)
@@ -362,7 +362,7 @@ What is usually preserved (but not guaranteed):
 - Module structure (ARM nested deployments become separate `.bicep` module files with `module` calls, not inlined)
 - The resource structure and properties
 
-Decompile is best-effort. If you need the exact original Bicep, keep it in version control. Use decompile to convert exported ARM JSON to editable Bicep, not to recover lost source. The decompiled Bicep is usually equivalent and needs cleanup (for example, it may use `reference(...)` which trips `use-resource-symbol-reference`), and it may not pass the course linter.
+Decompile is best-effort. If you need the exact original Bicep, keep it in version control. Use decompile to convert exported ARM JSON to editable Bicep, not to recover lost source. The decompiled Bicep is usually valid and needs cleanup (for example, it may use `reference(...)` which trips `use-resource-symbol-reference`), and it may not pass the course linter.
 
 **The plausible wrong reading.** You might expect decompile to be lossless: compile and decompile in a round trip, and you get the original file back. Decompile is a conversion tool, not a backup mechanism. ARM JSON does not store all the information the original Bicep had. Comments are lost. Symbolic names may change. The decompiled Bicep is valid but may need cleanup, and it is not identical to the original.
 
@@ -372,9 +372,9 @@ Decompile is best-effort. If you need the exact original Bicep, keep it in versi
 |-----------|---------------------|
 | Target scope vs deployment scope | The target scope is the scope the Bicep file declares with `targetScope` (or defaults to `resourceGroup`). The deployment scope is the scope you pass to the deployment command (`--resource-group`, `--subscription`, etc.). They must match. A resource-group-scoped file cannot be deployed at subscription scope. |
 | Incremental mode vs Complete mode | Incremental leaves resources not in the template alone. Complete deletes them. Incremental is the default. Complete is opt-in and only applies to resource-group deployments. |
-| Validation vs what-if | Validation checks that the template is well-formed. What-if predicts creates, updates, and deletes. Validation is fast and always succeeds or fails immediately. What-if is slower and requires Azure to compare the template to the current state. |
-| Compile vs decompile | Compile turns Bicep into ARM JSON. Decompile turns ARM JSON into Bicep. Compile is lossless. Decompile is best-effort and may rewrite or lose information. |
-| Export a deployment vs export a resource group | Exporting a deployment returns the template Azure used in that deployment. Exporting a resource group returns a snapshot of the current state as a template. The deployment export is the original template (possibly with defaulted parameters filled in). The resource group export is generated from live resources and often needs cleanup. |
+| Validation vs what-if | Both are online ARM calls that require Azure sign-in (and for group-scope deployments, an existing resource group). Validation checks that the template is well-formed and runs provider and Policy checks. What-if predicts creates, updates, and deletes. What-if is slower because it compares the template to the current state. |
+| Compile vs decompile | Compile turns Bicep into ARM JSON. Decompile turns ARM JSON into Bicep. Compile is semantics-preserving; comments are dropped. Decompile is best-effort and may rewrite or lose information. |
+| Export a deployment vs export a resource group | Exporting a deployment returns the template Azure used in that deployment. Exporting a resource group returns a snapshot of the current state as a template. The resource group export is generated from live resources and often needs cleanup. |
 | Module scope vs target scope | A module's target scope is the scope declared in the module file (`targetScope = 'resourceGroup'`). The module's deployment scope is the scope set by the calling file (`scope: rg`). The two must be compatible. You cannot deploy a resource-group-scoped module at subscription scope without specifying a resource group in the `scope` property. |
 
 ## Official docs
@@ -419,7 +419,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 - A Bicep file declares its target scope with `targetScope`; the default is `resourceGroup`.
 - Incremental mode leaves resources not in the template alone; Complete mode deletes them.
 - What-if predicts creates, updates, and deletes by comparing the template to the current state; it is not a guarantee.
-- Compile is lossless; decompile is best-effort and may rename symbolic names or rewrite logical expressions.
+- Compile is semantics-preserving; comments are dropped. Decompile is best-effort and may rename symbolic names or rewrite logical expressions.
 - To deploy a non-extension resource at a different scope, use a module with the `scope` property; `scope` is valid on modules, `existing` resources, and extension resources.
 - ARM JSON uses `[parameters('name')]` and `[variables('name')]` syntax; Bicep generates these expressions when you compile.
 
@@ -441,7 +441,3 @@ These are reference, not the reading. The lesson is the reading; the links are w
 |---|--------|-------|
 | 1 | r01-set-target-scope | Set targetScope and deploy a resource at that scope |
 | 2 | r02-edit-arm-json | Read and modify ARM JSON by hand |
-
----
-
-**Note:** This lesson uses the approved 450-line exception for A01.
