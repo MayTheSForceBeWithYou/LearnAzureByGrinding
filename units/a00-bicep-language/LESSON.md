@@ -20,7 +20,7 @@ Every Bicep file compiles to exactly one ARM template. The two commands you will
 
 ### File structure
 
-A Bicep file has five sections, in any order: **Parameters** (inputs), **Variables** (computed values), **Resources** (Azure resources to create), **Modules** (calls to other Bicep files), and **Outputs** (returned values). No section is required. Resources and modules are where the work happens.
+This unit teaches five kinds of declaration: **Parameters** (inputs), **Variables** (computed values), **Resources** (Azure resources to create), **Modules** (calls to other Bicep files), and **Outputs** (returned values). Bicep also has `targetScope` (covered in A01), `metadata`, user-defined `type` and `func`, and `import`. None is required, and declarations can appear in any order. Resources and modules are where the work happens.
 
 ### Parameters
 

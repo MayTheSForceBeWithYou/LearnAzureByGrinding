@@ -344,28 +344,6 @@ The reasoning for this example: The first account exists in the resource group, 
 
 **The plausible wrong reading.** You might expect what-if to show only the action symbol for Create, without the full body. That is not true. Create prints the full `after` body, Delete prints the full `before` body, and only Modify shows a diff. To see what will be created or deleted, read the what-if output, not just the template.
 
-## Worked example: What a compile/decompile round trip rewrites
-
-You write a Bicep file with parameters, variables, string interpolation, and a resource. You compile it with `bicep build`, producing ARM JSON. You then decompile with `bicep decompile --force`, overwriting the original. Decompile prints warnings: it is a best-effort process, and when the JSON came from Bicep, decompiling may produce less accurate results than the original.
-
-What is always lost:
-- Comments
-- Formatting and blank lines
-
-What may change:
-- Resource symbolic names (decompile may shorten or rename them)
-- Logical expressions (decompile may rewrite them, for example adding parentheses)
-
-What is usually preserved (but not guaranteed):
-- Parameter and variable names (they are JSON keys in the ARM template, so decompile keeps them)
-- String interpolation syntax (decompile reconstructs `${}` from `concat` or `format` calls)
-- Module structure (ARM nested deployments become separate `.bicep` module files with `module` calls, not inlined)
-- The resource structure and properties
-
-Decompile is best-effort. If you need the exact original Bicep, keep it in version control. Use decompile to convert exported ARM JSON to editable Bicep, not to recover lost source. The decompiled Bicep is usually valid and needs cleanup (for example, it may use `reference(...)` which trips `use-resource-symbol-reference`), and it may not pass the course linter.
-
-**The plausible wrong reading.** You might expect decompile to be lossless: compile and decompile in a round trip, and you get the original file back. Decompile is a conversion tool, not a backup mechanism. ARM JSON does not store all the information the original Bicep had. Comments are lost. Symbolic names may change. The decompiled Bicep is valid but may need cleanup, and it is not identical to the original.
-
 ## Distinctions worth keeping straight
 
 | Confusion | What separates them |
@@ -373,7 +351,7 @@ Decompile is best-effort. If you need the exact original Bicep, keep it in versi
 | Target scope vs deployment scope | The target scope is the scope the Bicep file declares with `targetScope` (or defaults to `resourceGroup`). The deployment scope is the scope you pass to the deployment command (`--resource-group`, `--subscription`, etc.). They must match. A resource-group-scoped file cannot be deployed at subscription scope. |
 | Incremental mode vs Complete mode | Incremental leaves resources not in the template alone. Complete deletes them. Incremental is the default. Complete is opt-in and only applies to resource-group deployments. |
 | Validation vs what-if | Both are online ARM calls that require Azure sign-in (and for group-scope deployments, an existing resource group). Validation checks that the template is well-formed and runs provider and Policy checks. What-if predicts creates, updates, and deletes. What-if is slower because it compares the template to the current state. |
-| Compile vs decompile | Compile turns Bicep into ARM JSON. Decompile turns ARM JSON into Bicep. Compile is semantics-preserving; comments are dropped. Decompile is best-effort and may rewrite or lose information. |
+| Compile vs decompile | Compile turns Bicep into ARM JSON. Decompile turns ARM JSON into Bicep. Compile is semantics-preserving; comments are dropped. Decompile is best-effort: it may rewrite (for example, add parentheses), and the decompiled Bicep is usually valid but may need cleanup. |
 | Export a deployment vs export a resource group | Exporting a deployment returns the template Azure used in that deployment. Exporting a resource group returns a snapshot of the current state as a template. The resource group export is generated from live resources and often needs cleanup. |
 | Module scope vs target scope | A module's target scope is the scope declared in the module file (`targetScope = 'resourceGroup'`). The module's deployment scope is the scope set by the calling file (`scope: rg`). The two must be compatible. You cannot deploy a resource-group-scoped module at subscription scope without specifying a resource group in the `scope` property. |
 
