@@ -1,8 +1,9 @@
 # Spec: Learn Azure by Grinding
 
-Version 0.2 (Phase 1, decisions of 20 November 2026 applied). Owner: Bruce (harness, CI,
-`docs/SPEC.md`, technical review). This file is the plan of record. When it disagrees with another document, this file wins; fix the other document and
-tell its owner.
+Version 0.3 (Phase 1, exercise/drill and pedagogy reviews of 21 November 2026 applied).
+Owner: Bruce (harness, CI, `docs/SPEC.md`, technical review). This file is the plan of
+record. When it disagrees with another document, this file wins; fix the other document
+and tell its owner.
 
 The skills outline in section 5 follows the official study guide for Exam AZ-104:
 Microsoft Azure Administrator, fetched on 20 November 2026 from
@@ -127,12 +128,13 @@ portal label has moved.
 
 #### What a personal MSA tenant is
 
-A **personal Microsoft account** is an MSA (for example an `@gmail.com` address you
-created at Microsoft, or a Microsoft account that uses Gmail as its sign-in). It is
-not a work or school account.
+A **personal Microsoft account** (MSA) is a Microsoft account a person signs in with,
+as opposed to a work or school account. Nathan signs in with his existing Gmail-based
+personal Microsoft account, `MayTheSForceBeWithYou@gmail.com`. Microsoft did not issue
+or create that Gmail address; it is the sign-in he already uses for the MSA.
 
-When you sign up for Azure or first sign in to the Azure portal with that MSA,
-Microsoft typically creates a **Microsoft Entra ID tenant** for that personal account.
+When he signs up for Azure or first signs in to the Azure portal with that MSA,
+Azure uses or creates a **Microsoft Entra ID tenant** for that personal account.
 In the portal it is often named **Default Directory**, and it gets an initial domain
 like `something.onmicrosoft.com`. The MSA is the first user in that directory (and
 usually a Global Administrator). That tenant is *your* personal Entra directory. It
@@ -196,7 +198,9 @@ past that gate. If Create is disabled, confirm you are in the personal directory
 that tenant creation is not turned off on the user settings page, and that the
 signed-in user has the Tenant Creator role (the MSA owner usually does). A documented
 fallback is a separate Microsoft 365 Developer Program test tenant, used only for
-A05, still never a work tenant.
+A05, still never a work tenant. That Developer Program tenant **expires** (the
+program's current term is time-limited and must be renewed or replaced); do not
+treat it as a permanent directory, and do not put lasting personal work there.
 
 Create a **Workforce** tenant, not B2C and not an External ID customer tenant:
 
@@ -213,18 +217,19 @@ Create a **Workforce** tenant, not B2C and not an External ID customer tenant:
    country/region (United States is fine).
 7. **Review + Create**, then **Create**. You are Global Administrator of the new
    tenant. Microsoft recommends two emergency-access ("break glass") cloud-only
-   Global Administrator accounts in a directory you will keep; for a disposable A05
-   tenant, prefer a couple of clearly named lab admin users and delete the tenant
-   when A05 is finished
+   Global Administrator accounts in any directory you intend to keep.
+   For this disposable A05 tenant, prefer a couple of clearly named lab admin users
+   instead, and delete the tenant when A05 is finished
    (<https://learn.microsoft.com/en-us/entra/fundamentals/create-new-tenant>).
 
 Switch directories cleanly, every time you move between resource labs and A05:
 
 - In the Azure portal, open the **Directories + subscriptions** filter (the filter /
   gear control in the portal header, sometimes labelled **Directory + subscription**)
-  and switch to the personal Default Directory for A00–A04 and A06–A17, or to the
-  A05 test tenant for directory work. Confirm the subscription list matches the
-  directory you expect (the A05 tenant may have no subscription, and that is fine).
+  and switch to the personal Default Directory for A00–A04, A06–A16, and A17 work
+  that is not Entra review, or to the A05 test tenant for A05 and for A17 Entra
+  walkthroughs. Confirm the subscription list matches the directory you expect
+  (the A05 tenant may have no subscription, and that is fine).
 - In Azure CLI, never rely on "whatever I last logged in to":
 
   ```powershell
@@ -235,9 +240,12 @@ Switch directories cleanly, every time you move between resource labs and A05:
   ```
 
   For A05 Graph/CLI work, `az login --tenant <a05-test-tenant-id>` and confirm
-  `tenantId` before creating users. `lab-up.ps1` / `lab-down.ps1` always use the
-  personal tenant and subscription pinned in `.lab-env.json`; they must not target
-  the A05 directory for resource deployments.
+  `tenantId` before creating users. Any A05 directory script, and `lab-up.ps1` when
+  the unit is A05, must also match `.lab-env.json`'s `expectedEntraTenantId` (below)
+  or refuse to run. `lab-up.ps1` / `lab-down.ps1` for *resource* labs always use the
+  personal tenant and subscription pinned as `expectedTenantId` and
+  `expectedSubscriptionId`; they must not target the A05 directory for resource
+  deployments.
 
 #### Entra ID Free versus P1 / P2, and the 30-day trial
 
@@ -273,7 +281,8 @@ describes a short P1/P2 trial that requires a payment method and, in the terms s
 on that page, **can automatically convert to a paid 12-month subscription unless it
 is canceled during the trial**. Always read the trial terms *at the moment you click
 Start*, and check **Recurring billing** in the Microsoft 365 admin center for that
-tenant (some trials show Recurring billing Off and simply expire; do not assume).
+tenant (some trials show Recurring billing Off and expire without converting; do
+not assume).
 Start the trial only in the **A05 test tenant**, never in a work tenant and never as
 a licence you leave assigned on your personal MSA. Cancel before the last day, or
 confirm the trial is set not to convert, and remove any paid P1/P2 licence
@@ -340,15 +349,28 @@ directory. Concrete steps, all of them required:
    ```json
    {
      "expectedTenantId": "<personal-msa-tenant-guid>",
-     "expectedSubscriptionId": "<personal-subscription-guid>"
+     "expectedSubscriptionId": "<personal-subscription-guid>",
+     "expectedEntraTenantId": "<a05-disposable-test-tenant-guid>"
    }
    ```
 
-4. `lab-up.ps1` and `lab-down.ps1` **must** read that file, compare it with
-   `az account show`, and **refuse to run** if the active tenant or subscription
-   does not match, if the file is missing, or if the active tenant **looks
-   corporate** (for example a verified domain of `deloitte.com` or any other
-   work domain, or a tenant display name that is clearly an employer directory).
+   `expectedTenantId` is the personal Default Directory used for resource labs.
+   `expectedEntraTenantId` is the disposable A05 test tenant, and is **not** the
+   personal Default Directory.
+
+4. `lab-up.ps1` and `lab-down.ps1` **must** read that file and **refuse to run** if
+   the file is missing, if the active tenant **looks corporate** (any tenant display
+   name or verified domain that contains `deloitte`, including `deloitte.com`, or any
+   other work domain / employer directory), or if the pin does not match:
+
+   - For resource labs (A00–A04, A06–A17 except A17 Entra review): the active tenant
+     and subscription must match `expectedTenantId` and `expectedSubscriptionId`.
+   - For A05 (and A17 Entra walkthroughs that create or modify directory objects):
+     the active tenant must match `expectedEntraTenantId`. Every A05 Graph/CLI
+     user-creation or directory script must make the same check, even if it is not
+     invoked through `lab-up.ps1`. A missed `az login --tenant` must not be able to
+     mutate the personal Default Directory.
+
    The refusal is a hard error, not a warning the student can click past.
 
 Phase 1 infra implements those checks; this spec is the rule they implement.
@@ -378,8 +400,9 @@ solutions/a06-storage-accounts/
 
 - **Exercise id**: `aNN-eNN-<slug>` (e.g. `a06-e01-storage-account`), always the full form.
 - **Drill id**: `aNN-rNN-<slug>` (e.g. `a06-r01-sku-and-kind-reps`). `r` is for "rep."
-- **Capstone id**: `cN-<name>`, folder `capstones/cN-<name>/`, solution
-  `solutions/capstones/cN-<name>/`.
+- **Capstone id**: `cN-<name>`, folder `capstones/cN-<name>/`, with a unit-level
+  `LESSON.md` or README and `eNN-<slug>/` exercise folders (same format as unit
+  exercises). Solution: `solutions/capstones/cN-<name>/`.
 - A Pester structural test that passes prints `<id>: all checks passed` and exits 0, the
   same contract as `checks_done("<id>")` in the C courses.
 
@@ -388,31 +411,46 @@ solutions/a06-storage-accounts/
 | | Exercise | Drill |
 |---|---|---|
 | Purpose | learn a resource, a template pattern, or a portal/CLI skill | make one skill automatic by repetition |
-| Tags | any (section 4.3) | always `[DRILL]` (builds like `[WRITE]`) |
-| Size | S or M (L for capstones and some `[LAB]`s) | XS or S: 15–25 minutes for a practised student |
+| Tags | any (section 4.3); `Tags` is a string array, first tag primary | always `Tags = @('DRILL')` only |
+| Size | S or M (L for capstones and some `[LAB]`s); see section 7.8 | XS or S; see section 7.8 |
 | Done | once, to "clean everywhere" (section 8.4) | at least 3 reps on different days, each from a fresh copy (`scripts/rep.ps1`) |
 | README | goal, constraints, verify, at most one hint | skill, rules, time target, verify; no hint |
 | Builds on | the unit's lesson and earlier exercises | nothing: self-contained |
-| Live Azure | only if tagged `[LAB]`, or a `[CLI]`/`[WHATIF]` that the README says is live | never; drills are offline |
+| Live Azure | only if tagged `[LAB]` | never in CI or in `verify-all`; optional student-run live `az` is allowed only where a README says so (A05), and is not the graded path |
+
+A Bicep drill follows the `[WRITE]` pattern: the starter is valid Bicep, `bicep build`
+succeeds, and a Pester structural test over the compiled JSON fails until the student
+writes the resources.
+
+A CLI or PowerShell drill (A05, and any other non-Bicep drill) is still tagged only
+`[DRILL]`. The student writes a script (for example `main.ps1`) below a marker. The
+starter must be valid PowerShell: it **parses**. A Pester test fails until the script
+implements the required commands. Verification is **offline**: tests invoke the script
+against a checked-in fixture under the exercise's `fixtures/` directory, or through a
+mock of `az` / `Get-Az*` in `lib/`. The script must accept a test hook (for example
+`-Context`, or a wrapper the tests inject) so `verify-all` never needs a live login.
+Live `az` against the A05 test tenant is optional, student-run, never part of CI, and
+still subject to the `expectedEntraTenantId` refusal in section 3.2.
 
 ### 4.3 Tags
 
 | Tag | Student... | Starter state (the fail-until-worked rule) |
 |---|---|---|
-| `[WRITE]` | writes the missing resources, properties, or outputs in Bicep | Valid Bicep: `bicep build` and `bicep lint` **succeed**. Required resources or outputs are absent. The Pester structural test over the compiled JSON **fails** until the student writes the real resources. No dummy resources that satisfy the test, no broken syntax, no `#disable-next-line` or commented-out stop lines to delete. |
-| `[MODIFY]` | changes an existing Bicep file or ARM JSON in a stated way | The file compiles. The structural test **fails** until the required change is present (a property, SKU, name, dependency, or equivalent JSON edit). |
-| `[DRILL]` | implements a small, repeatable Bicep or CLI skill | Same fail rule as `[WRITE]`. |
-| `[BUG]` | finds and fixes a real misconfiguration, and explains it in `ANSWER.md` | Compiles. `bicep lint` (at error level), PSRule, or a Pester test **fails** on the advertised defect (open storage, HTTP-only, NSG allow-all, secret in an output, missing lock, and so on). After the fix, those checks pass. |
+| `[WRITE]` | writes the missing resources, properties, or outputs in Bicep | Valid Bicep: `bicep build`, `bicep lint`, and PSRule **succeed**. Required *types* in `ExpectResources` (and optional `ExpectOutputs`) are absent. The Pester structural test over the compiled JSON **fails** until the student writes the real resources. No dummy resources that satisfy the test, no broken syntax, no `#disable-next-line` or commented-out stop lines to delete. |
+| `[MODIFY]` | changes an existing Bicep file or ARM JSON in a stated way | The file already contains the resource types. `bicep build`, `bicep lint`, and PSRule **succeed**. verify-all checks `ExpectProperties` (not a missing type). The property test **fails** until the student makes the stated change. |
+| `[DRILL]` | implements a small, repeatable Bicep or CLI/PowerShell skill | Bicep drills: same fail rule as `[WRITE]`. CLI/PowerShell drills: the starter parses; a Pester test fails until the script implements the required commands (section 4.2). |
+| `[BUG]` | finds and fixes a real misconfiguration, and explains it in `ANSWER.md` | `bicep build` **succeeds**. The starter may fail exactly the lint or PSRule rule(s) named in `ExpectDiagnostics = @('...')`. Those expected failures are the starter-fail condition, not an authoring bug. Unexpected lint or PSRule failures on a `[BUG]` starter *are* authoring bugs. The matching solution is clean of those diagnostics. A Pester test may also be the advertised defect. After the fix, those checks pass. |
 | `[PREDICT]` | writes the outcome first (resource types, lint findings, change types, a cost or size), then runs the offline check | The starter compiles. The prediction lives in `ANSWER.md` or a filled table; it is compared by hand to a capture or program printout, as in `d00-e01-layout-predict`. |
-| `[WHATIF]` | predicts what-if change types (Create, Modify, Delete, NoChange, Ignore, …) before looking | Offline preferred: a checked-in what-if (or snapshot) fixture, like `capture.txt`. Live what-if, when used, is also tagged `[LAB]`, is never run in CI, and needs a login. |
+| `[WHATIF]` | predicts what-if change types (Create, Modify, Delete, NoChange, Ignore, …) before looking | Offline default: a checked-in what-if JSON fixture that is **real command output**. If the capture is not yet taken, the file must contain `OUTPUT-PENDING`, which fails verify-all and blocks merge. Never invent a payload. Live what-if, when used, is also tagged `[LAB]`, is never run in CI, and needs a login. |
 | `[EXPLAIN]` | writes a short, specific explanation in `ANSWER.md`; no required code change | The shipped file, if any, already compiles and its automated checks pass. The graded artefact is `ANSWER.md`. |
 | `[LAB]` | deploys to the learner subscription, then verifies with CLI or Pester post-deploy assertions, then tears down | Offline checks may already pass. The live deploy is **gated** (section 10) and **never part of CI**. `verify-all` only checks that the lab scripts and offline tests exist and that the starter/solution still satisfy the offline rules for their other tags. |
-| `[PORTAL]` / `[CLI]` | does a task that cannot honestly be graded from a template alone | Verified by a query script the student runs (`az` / Az PowerShell) whose output is saved as `capture.txt` with a source hash, by a checklist the script can assert, or by `ANSWER.md` where a machine check would be fake. May combine with `[LAB]`. |
-| `[NO-LIVE]` | (marker) this exercise must not attempt a deployment | |
+| `[PORTAL]` / `[CLI]` | does a task that cannot honestly be graded from a template alone | Default verification is an **offline fixture** plus a script that CI runs against that fixture. Live portal steps, when present, are documented in the README and checked through `ANSWER.md` headings, not by CI logging into Azure. May combine with `[LAB]`. |
+| `[NO-LIVE]` | (optional marker) this exercise must not call Azure, even if it looks live | **Implicit for every tag except `[LAB]`.** Use the marker on exercises that might look live (`[WHATIF]`, `[CLI]`) but must not call Azure. verify-all fails the exercise if its tests or scripts would call `az`, `Connect-AzAccount`, or ARM without a mock or fixture. `[LAB]` is the only tag that may require a login, and `[LAB]` is never run in CI. |
 
-`[PORTAL]` and `[CLI]` may appear together (`[CLI] [PORTAL]`) when either interface is
-acceptable. A Makefile-style tag line in `exercise.psd1` lists them as separate words, the
-way the C courses list `TAG = BUG NO-ASAN`.
+`[PORTAL]` and `[CLI]` may appear together when either interface is acceptable.
+`exercise.psd1` stores them as a string array, for example `Tags = @('CLI', 'PORTAL')`.
+The first tag is the primary tag and selects the fail-until-worked rule; additional
+tags are modifiers (`LAB`, `NO-LIVE`, and so on). A drill is always `Tags = @('DRILL')`.
 
 **Why `[WRITE]` compiles but the test fails.** Nathan's standing rule is that a starter
 must fail until the student does the real work, with no dummy stubs and no stop lines. In
@@ -421,8 +459,10 @@ Bicep has no link step. Forcing a compile failure would mean broken syntax or a
 `#disable` / commented resource the student deletes — the same class of stub the C courses
 forbid. So `bicep build` is the compile step and the Pester structural test is the link
 step. `EXPECT_RESOURCES` (and optional `EXPECT_OUTPUTS`) in `exercise.psd1` is the symbol
-list: verify-all requires the starter's compiled JSON to be **missing** those types (or
-fail the named Pester tests), and the solution's JSON to satisfy them.
+list for `[WRITE]`: verify-all requires the starter's compiled JSON to be **missing**
+those types (or fail the named Pester tests), and the solution's JSON to satisfy them.
+`[MODIFY]` uses `ExpectProperties` instead: the type is already present; the stated
+property is not, until the student edits it.
 
 **Skills that are portal- or CLI-only in this course** (they may still have a Bicep
 prelude, but the exam skill itself is verified as `[PORTAL]` / `[CLI]` / `[LAB]`):
@@ -444,26 +484,41 @@ prelude, but the exam skill itself is verified as `[PORTAL]` / `[CLI]` / `[LAB]`
 
 ### 4.4 The rule that never bends
 
-**Every `[WRITE]`, `[DRILL]`, and `[MODIFY]` starter fails its structural test until the
-student does the real work, and that failure is the test, not a compile error.**
+**Every `[WRITE]`, `[DRILL]`, and `[MODIFY]` starter fails its structural (or script)
+test until the student does the real work, and that failure is the test, not a compile
+or parse error.**
 
-- The starter is legal Bicep or legal ARM JSON. `bicep build` / `bicep lint` (or the ARM
-  JSON parse) succeeds with the course `bicepconfig.json`. A compile error in a starter is
-  a bug in the exercise, and verify-all reports it as one.
-- The Pester structural tests in the exercise folder are the harness. They compile the
-  entry file and assert required resource types, names, properties, or outputs. On a
-  `[WRITE]` / `[DRILL]` starter those assertions fail. On a `[MODIFY]` starter they fail
-  until the stated change exists. On the solution they pass.
+- A Bicep or ARM `[WRITE]` / `[MODIFY]` starter is legal. `bicep build`, `bicep lint`
+  (with the course `bicepconfig.json`), and PSRule succeed. A compile, lint, or PSRule
+  error on these starters is an authoring bug, and verify-all reports it as one.
+- `[WRITE]` (and Bicep `[DRILL]`) assertions use `ExpectResources` (required resource
+  types that must appear) and optional `ExpectOutputs`. The starter's compiled JSON is
+  missing those types; the tests fail until the student writes them.
+- `[MODIFY]` starters already contain the resource types. verify-all checks
+  `ExpectProperties` and does **not** require the starter to omit the type. The starter
+  fails the property test until the student makes the change. Example field:
+
+  ```powershell
+  ExpectProperties = @(
+    @{ ResourceType = 'Microsoft.Storage/storageAccounts'; Path = 'sku.name'; Value = 'Standard_GRS' }
+  )
+  ```
+
+- A CLI/PowerShell `[DRILL]` starter is valid PowerShell (it parses). A Pester test
+  fails until the script implements the required commands (section 4.2).
 - No dummy resource that satisfies a test, no `todo` output the test treats as success,
   no `#disable-next-line`, no commented-out resource the student "uncomments," no README
   that says "delete this line to continue."
-- `EXPECT_RESOURCES` / `EXPECT_OUTPUTS` in `exercise.psd1` must match what the tests
-  enforce. verify-all checks that the starter fails those tests and that the failure is
-  about the expected types, not a crash or a lint error.
+- Manifest fields must match what the tests enforce. verify-all checks that the starter
+  fails those tests and that the failure is about the expected types, properties, or
+  commands — not a crash, and not an unexpected lint or PSRule error.
 
-`[BUG]` starters follow the neighbouring rule: they compile, then the designated lint
-rule, PSRule rule, or Pester test fails. `[EXPLAIN]` / `[PREDICT]` starters compile and
-their automated checks pass (the prose is the work).
+`[BUG]` starters must still `bicep build`. They may fail exactly the lint or PSRule
+rule(s) named in `ExpectDiagnostics = @('...')`. verify-all treats those expected
+failures as the starter-fail condition, not as an authoring bug. Unexpected lint or
+PSRule failures on a `[BUG]` starter are still authoring bugs. The matching solution
+must be clean of those diagnostics. `[EXPLAIN]` / `[PREDICT]` starters compile (and
+are lint- and PSRule-clean) and their automated checks pass (the prose is the work).
 
 That rule is **approved** (20 November 2026). Here is why it is written this way, in
 plain language.
@@ -490,20 +545,23 @@ This course uses the same discipline in Bicep:
    what you wrote (or a bug in the starter). Fix the Bicep first. The structural test
    is only meaningful on a template that compiles.
 
+A CLI or PowerShell drill is the same idea in a different language: the starter
+parses, and the Pester test stays red until the script does the work.
+
 ### 4.5 Verification layers
 
 | Layer | Tools | Needs an Azure login? | In `verify-all` / CI? |
 |---|---|---|---|
 | Compile | `bicep build`, `bicep build-params` | No | Yes |
-| Lint | `bicep lint` with the repo `bicepconfig.json`; course rules set to `Error` as listed in AUTHORING-INFRA | No | Yes |
+| Lint | `bicep lint` with the repo `bicepconfig.json`; course rules set to `Error` as listed in AUTHORING-INFRA. `[WRITE]` / `[MODIFY]` starters must be lint-clean. `[BUG]` starters may fail only the rule ids in `ExpectDiagnostics` | No | Yes |
 | Snapshot | `bicep snapshot` on a `.bicepparam`, only if the pinned CLI treats it as stable | No | Optional (section 13.2) |
-| Resource / WAF rules | `PSRule.Rules.Azure` with `AZURE_BICEP_FILE_EXPANSION: true` in `ps-rule.yaml` | No | Yes (also the `microsoft/ps-rule` CI action) |
+| Resource / WAF rules | `PSRule.Rules.Azure` with `AZURE_BICEP_FILE_EXPANSION: true` in `ps-rule.yaml`. `[WRITE]` / `[MODIFY]` starters must be PSRule-clean. `[BUG]` starters may fail only the rule ids in `ExpectDiagnostics` | No | Yes (also the `microsoft/ps-rule` CI action) |
 | Structural tests | Pester 5, over compiled JSON and, for solutions, over expected outputs | No | Yes |
 | ARM JSON style | `arm-ttk`, **optional, A01 only**, for raw ARM JSON exercises | No | Optional; not the default language test (Bicep already contains the deploymentTemplate TTK cases; new investment is the Bicep linter; arm-ttk 0.27 remains available for JSON / createUiDefinition) |
 | Preflight | `az deployment group validate --validation-level Provider\|ProviderNoRbac\|Template` (CLI 2.76+) | Yes | No (a `[LAB]` step the student runs) |
 | What-if | `az deployment group what-if` (and sub / mg / tenant when the exercise is at that scope) | Yes, unless the exercise uses a checked-in fixture | Fixture: yes. Live: no |
 | Post-deploy | Pester + `az` / Az PowerShell assertions | Yes | No |
-| Portal / CLI skills | query scripts, `capture.txt` hashes, or `ANSWER.md` | Often yes | Scripts exist and offline captures are not STALE; live output is not replayed in CI |
+| Portal / CLI skills | script + checked-in fixture; `ANSWER.md` headings where the README requires prose | No for the default path | Yes: the fixture script runs. Live portal/CLI steps are not replayed. `ANSWER.md`, when required, must exist, be non-empty, and contain every required heading (quality of prose is not graded) |
 
 `az bicep build` / `az bicep lint` do not take `--config`. Course scripts call the Bicep
 CLI directly (`bicep lint --config ./bicepconfig.json`) so the repo config is always the
@@ -548,16 +606,17 @@ and is a prerequisite for every later `[LAB]`.
   template; deploy resources by using an ARM template or a Bicep file; export a deployment
   as an ARM template or compile a deployment as a Bicep file). Scopes and what-if.
 - **Goal:** The student can place a deployment at resource-group, subscription, management
-  group, or tenant scope; choose Incremental vs Complete; run validate and what-if (fixture
-  first, live later); read and modify ARM JSON; decompile ARM to Bicep and compile Bicep to
-  ARM; say what is lost or rewritten in that round trip.
-- **Portal / CLI-only:** exporting a live deployment as a template (`[CLI]` / `[LAB]`,
-  after A02's cost guard). A checked-in export fixture covers the offline path.
-- **Targets:** 7 exercises, 2 drills. Must include `[MODIFY]` on ARM JSON, `[WHATIF]`,
-  `[WRITE]` in Bicep, and an `[EXPLAIN]` on scope and mode.
-- **Notes:** `arm-ttk` is optional on the ARM JSON exercises only. Deploy as a `[LAB]`
-  is a no- or low-cost resource group deployment and is blocked until A02-e0N (the budget)
-  is done. The first budget lab stays in A02 (resolved 20 November 2026).
+  group, or tenant scope; choose Incremental vs Complete; run validate and what-if against
+  a **fixture**; read and modify ARM JSON; decompile ARM to Bicep and compile Bicep to
+  ARM; say what is lost or rewritten in that round trip. Export and decompile in this
+  unit are offline, from a fixture or a compiled template.
+- **Portal / CLI-only:** none live. A checked-in export/decompile fixture covers the
+  offline export bullet in this unit. The live export of a real deployment is in A02.
+- **Targets:** 7 exercises, 2 drills. Must include `[MODIFY]` on ARM JSON, `[WHATIF]`
+  (fixture), `[WRITE]` in Bicep, and an `[EXPLAIN]` on scope and mode.
+- **Notes:** **A01 is offline only. There is no `[LAB]` in A01**, and there is no
+  "return after A02" exercise in this unit. `arm-ttk` is optional on the ARM JSON
+  exercises only. The first live deploy is in A02.
 
 ### A02: Cost control and lab guardrails
 
@@ -569,15 +628,18 @@ and is a prerequisite for every later `[LAB]`.
   resources cost money if left running.
 - **Portal / CLI-only:** reading Advisor recommendations; inspecting budget status in the
   portal or with CLI.
-- **Targets:** 5 exercises, 2 drills. **Required `[LAB]`:** deploy the course budget and
-  action group (and, if authors choose, the SKU/region restrictive Policy) into the lab
-  subscription or the lab resource-group scope. This exercise is the gate for every later
-  `[LAB]`. Recommended budget: **$10–$25 per month**, with alerts at **50%, 80%, and
-  100%** of both **Actual** and **Forecasted** cost (section 3.2).
+- **Targets:** 5 exercises, 2 drills. **Required `[LAB]`:** this is the course's **first
+  live deploy**. Deploy the course budget and action group (and, if authors choose, the
+  SKU/region restrictive Policy) into the lab subscription or the lab resource-group
+  scope. The same lab **may also deploy a small A01-style template**, and it **includes
+  a live export of that deployment as ARM JSON or Bicep**, so the official export bullet
+  is covered as A01 offline compile/decompile plus A02 live export. This exercise is the
+  gate for every later `[LAB]`. Recommended budget: **$10–$25 per month**, with alerts at
+  **50%, 80%, and 100%** of both **Actual** and **Forecasted** cost (section 3.2).
 - **Notes:** This is "unit 1" in the operational sense: the first subscription-backed work,
-  placed immediately after the student can deploy, and before any unit that creates disks,
-  public IPs, Bastion, or vaults. Isolation checks (`.lab-env.json`, `az account show`)
-  are taught here and then enforced by `lab-up.ps1`.
+  placed immediately after the student can author a deployment offline, and before any
+  unit that creates disks, public IPs, Bastion, or vaults. Isolation checks
+  (`.lab-env.json`, `az account show`) are taught here and then enforced by `lab-up.ps1`.
 
 ### A03: Resource groups, tags, locks, subscriptions, and management groups
 
@@ -616,13 +678,20 @@ and is a prerequisite for every later `[LAB]`.
 - **Portal / CLI-only:** **almost the entire unit.** Bicep has no honest way to grade
   "configure SSPR." Exercises are `[PORTAL]` / `[CLI]` / `[EXPLAIN]`, with query scripts
   (`az ad user`, Microsoft Graph via `az` or Microsoft.Graph) and `ANSWER.md`.
-- **Targets:** 6 exercises, 2 drills (CLI reps, not Bicep).
+- **Targets:** 6 exercises, 2 drills. Drills are CLI/PowerShell-script drills (section
+  4.2), not Bicep.
+- **Composition (this is the rule, not a loosening):** no required `[BUG]` or
+  `[WHATIF]`. At least one `[PREDICT]` against a CLI fixture is allowed and satisfies
+  the predict slot. At least one `[PORTAL]` or `[CLI]`. `[WRITE]` / `[MODIFY]` are not
+  required; include them only if a slice is genuinely Bicep-able (for example a role
+  assignment).
 - **Notes:** No exercises that modify production or work users, or users in the personal
-  MSA Default Directory. The lesson states the tenant rule, how to switch directories,
-  and Free vs P1/P2 (including the 30-day trial warning) before the first task. Free-tier
-  tasks are the default path; dynamic groups, Conditional Access, SSPR reset, and PIM
-  are clearly marked and use a trial in the *test* tenant or an `[EXPLAIN]` / Learn
-  sandbox alternative.
+  MSA Default Directory. Directory scripts and `lab-up` for this unit refuse to run
+  unless the active tenant matches `expectedEntraTenantId` (section 3.2). The lesson
+  states the tenant rule, how to switch directories, and Free vs P1/P2 (including the
+  30-day trial warning) before the first task. Free-tier tasks are the default path;
+  dynamic groups, Conditional Access, SSPR reset, and PIM are clearly marked and use a
+  trial in the *test* tenant or an `[EXPLAIN]` / Learn sandbox alternative.
 
 ### A06: Storage accounts, redundancy, and encryption
 
@@ -635,16 +704,20 @@ and is a prerequisite for every later `[LAB]`.
 - **Portal / CLI-only:** none required here (Explorer/AzCopy wait until A08).
 - **Targets:** 6 exercises, 2 drills.
 
-### A07: Storage access, SAS, keys, and network rules
+### A07: Storage access, SAS, keys, and IP firewalls
 
 - **Folder:** `units/a07-storage-access`
-- **AZ-104:** Configure access to storage (firewalls and virtual networks; SAS tokens;
-  stored access policies; access keys; identity-based access for Azure Files).
-- **Goal:** Restrict a storage account with firewall and VNet rules, express a stored
-  access policy in the template or CLI, use identity-based access for Azure Files, and
-  *create and use* a SAS and rotate or list keys from the CLI.
-- **Portal / CLI-only:** creating and using SAS tokens; managing access keys. Network
-  rules and identity-based Files access can be Bicep, with a `[CLI]` confirmation.
+- **AZ-104:** Configure access to storage — the A07 slice is **IP firewall rules, SAS
+  tokens, stored access policies, and access keys**. This unit does **not** depend on
+  VNets (A09) or Azure Files (A08). The official bullet "Configure Azure Storage
+  firewalls and virtual networks" (VNet rules / service endpoints on a storage account)
+  is taught in **A10**. "Configure identity-based access for Azure Files" is taught in
+  **A08**, after the file share is created.
+- **Goal:** Restrict a storage account with **IP** firewall rules, express a stored
+  access policy in the template or CLI, and *create and use* a SAS and rotate or list
+  keys from the CLI.
+- **Portal / CLI-only:** creating and using SAS tokens; managing access keys. IP
+  firewall rules can be Bicep, with a `[CLI]` confirmation.
 - **Targets:** 6 exercises, 2 drills.
 
 ### A08: Azure Files and Blob Storage
@@ -652,11 +725,15 @@ and is a prerequisite for every later `[LAB]`.
 - **Folder:** `units/a08-storage-data-services`
 - **AZ-104:** Configure Azure Files and Azure Blob Storage (file share; blob container;
   tiers; snapshots and soft delete for Azure Files; blob lifecycle; blob versioning).
-  Also: manage data by using Azure Storage Explorer and AzCopy.
+  Also: manage data by using Azure Storage Explorer and AzCopy; and **configure
+  identity-based access for Azure Files** (moved here from the access unit so it comes
+  after the share exists).
 - **Goal:** Declare shares and containers, tiers, soft delete, versioning, and a lifecycle
-  rule in Bicep; move a sample object with AzCopy; look at the same account in Storage
+  rule in Bicep; configure identity-based access for Azure Files **after** the file share
+  is created; move a sample object with AzCopy; look at the same account in Storage
   Explorer.
-- **Portal / CLI-only:** Storage Explorer and AzCopy (`[PORTAL]` / `[CLI]`).
+- **Portal / CLI-only:** Storage Explorer and AzCopy (`[PORTAL]` / `[CLI]`); confirm
+  identity-based Files access with `[CLI]` as needed.
 - **Targets:** 6 exercises, 2 drills.
 
 ### A09: Virtual networks, peering, addresses, and routing
@@ -672,14 +749,18 @@ and is a prerequisite for every later `[LAB]`.
 - **Targets:** 6 exercises, 2 drills.
 - **Notes:** Public IPs are created only in named exercises and are tagged for `lab-down`.
   Prefer no public IP when a private-only topology will do.
+
 ### A10: Network security groups, Bastion, and private access
 
 - **Folder:** `units/a10-network-security`
 - **AZ-104:** Configure secure access to virtual networks (NSGs and ASGs; evaluate
-  effective security rules; Azure Bastion; service endpoints; private endpoints).
+  effective security rules; Azure Bastion; service endpoints; private endpoints). Also
+  the official bullet **Configure Azure Storage firewalls and virtual networks** (VNet
+  rules / service endpoints on a storage account), taught here because it needs a VNet
+  and sits with the other private-access work.
 - **Goal:** Write NSGs and ASGs in Bicep, evaluate effective rules from the CLI or portal,
-  configure service and private endpoints, and know when Bastion is the right access path
-  and what it costs.
+  configure service and private endpoints (including storage-account VNet rules / service
+  endpoints), and know when Bastion is the right access path and what it costs.
 - **Portal / CLI-only:** evaluate effective security rules.
 - **Optional costly `[LAB]`:** Azure Bastion. Prefer the **Developer** SKU (free) when it
   covers the skill. Basic and Standard are optional "see the bill, then delete" labs,
@@ -716,7 +797,10 @@ and is a prerequisite for every later `[LAB]`.
   for the small VM, managed disk, Key Vault Standard operations, and any public IP)
   with `up.bicep` and `lab-up` / `lab-down` (section 10.7). The bullet is always
   covered, at least as `[EXPLAIN]`, if the student skips the live lab.
-- **Targets:** 7 exercises, 2 drills.
+- **Targets:** 7 exercises, 2 drills. Do not raise this target. The author (Jack) may
+  combine official bullets into fewer exercises, provided every official AZ-104 bullet
+  remains in the section 5.3 coverage matrix and the unit still meets composition
+  minimums (section 7.8).
 - **Notes:** Auto-shutdown is mandatory on every lab VM (section 10). `lab-down` after
   each `[LAB]`. No VPN gateway, no Azure Firewall, no D-series "to be safe."
 
@@ -760,7 +844,10 @@ and is a prerequisite for every later `[LAB]`.
   are **optional** costly labs with `up.bicep` and same-day teardown (section 10.7).
 - **Portal / CLI-only:** the live DNS mapping and certificate bind (or the no-domain
   walkthrough).
-- **Targets:** 7 exercises, 2 drills.
+- **Targets:** 7 exercises, 2 drills. Do not raise this target. The author (Jack) may
+  combine official bullets into fewer exercises, provided every official AZ-104 bullet
+  remains in the section 5.3 coverage matrix and the unit still meets composition
+  minimums (section 7.8).
 - **Notes:** Prefer a Free or Linux Basic plan allowed by the lab Policy unless the
   exercise needs slots. Tear down apps and plans in `lab-down`; an empty plan still
   bills on paid SKUs.
@@ -810,8 +897,14 @@ and is a prerequisite for every later `[LAB]`.
   guide bullet by bullet against this course's coverage matrix, and fills any personal
   gaps before booking.
 - **Portal / CLI-only:** practice assessment and portal walkthroughs are the work.
-- **Targets:** 4 exercises, 0–1 drills. Tags: `[EXPLAIN]`, `[PREDICT]`, `[PORTAL]`. No
-  new billable resources.
+- **Targets:** 4 exercises, 0–1 drills. **Composition (this is the rule, not a
+  loosening):** no required `[WRITE]`, `[MODIFY]`, `[BUG]`, or `[WHATIF]`. The unit is
+  `[PREDICT]`, `[EXPLAIN]`, `[PORTAL]` / `[CLI]` walkthroughs, and practice-assessment
+  work. No new billable resources.
+- **Tenants:** Entra walkthroughs in A17 use the **A05 test tenant** (and the
+  `expectedEntraTenantId` refusal). Everything else in A17 uses the personal
+  subscription. If the student has already deleted the test tenant, A17 Entra review is
+  a Microsoft Learn sandbox and `[EXPLAIN]` only.
 - **Official links to cite in the lesson and READMEs (re-check at authoring time):**
   - Study guide: <https://learn.microsoft.com/en-us/credentials/certifications/resources/study-guides/az-104>
   - Certification page: <https://learn.microsoft.com/en-us/credentials/certifications/azure-administrator/>
@@ -823,23 +916,28 @@ and is a prerequisite for every later `[LAB]`.
 
 ### Capstones
 
-Each capstone is an L exercise (one folder, possibly several Bicep modules) that composes
-earlier units. Same harness rules; `[LAB]` is optional and always torn down. Solutions
-are complete and pass offline verify.
+Each capstone lives at `capstones/cN-<name>/` with a unit-level `LESSON.md` or README
+and one or more `eNN-<slug>/` exercise folders that use the **same format as unit
+exercises** (section 7). A capstone is typically one L exercise (modules allowed inside
+that folder); additional `eNN` folders are allowed if they earn their keep. Same harness
+rules; `[LAB]` is optional and always torn down. Solutions are complete and pass
+offline verify.
 
-- **C1: `capstones/c1-landing-zone` — Governance baseline.** A small subscription or
-  resource-group baseline: management organisation, tags, locks, Policy, RBAC, and the
-  course budget pattern. Pulls A02–A04 (and A05 only as documentation of where identity
-  sits).
-- **C2: `capstones/c2-hub-spoke` — Hub-and-spoke network.** Shared hub, two spokes,
-  peering, NSGs, optional Bastion (Developer preferred; Basic/Standard optional and
-  torn down the same day) or a cheaper alternative, DNS. Pulls A09–A11. Cost
-  rules still apply: no Firewall/VPN unless a future decision adds a tightly scoped,
-  immediately deleted `[LAB]`.
-- **C3: `capstones/c3-three-tier` — App, monitoring, and backup.** A small three-tier
-  (or two-tier, if a VM tier would blow the budget) application: network, compute or App
-  Service, storage, Monitor alerts, and a backup policy. Pulls A06–A08, A12 or A14, A15,
-  A16.
+**When to attempt them:** **C1 after A04**, **C2 after A11**, **C3 after A16**.
+
+- **C1: `capstones/c1-landing-zone` — Governance baseline.** Attempt after A04. A small
+  subscription or resource-group baseline: management organisation, tags, locks, Policy,
+  RBAC, and the course budget pattern. Pulls A02–A04 (and A05 only as documentation of
+  where identity sits).
+- **C2: `capstones/c2-hub-spoke` — Hub-and-spoke network.** Attempt after A11. Shared
+  hub, two spokes, peering, NSGs, optional Bastion (Developer preferred; Basic/Standard
+  optional and torn down the same day) or a cheaper alternative, DNS. Pulls A09–A11.
+  Cost rules still apply: no Firewall/VPN unless a future decision adds a tightly
+  scoped, immediately deleted `[LAB]`.
+- **C3: `capstones/c3-three-tier` — App, monitoring, and backup.** Attempt after A16. A
+  small three-tier (or two-tier, if a VM tier would blow the budget) application:
+  network, compute or App Service, storage, Monitor alerts, and a backup policy. Pulls
+  A06–A08, A12 or A14, A15, A16.
 
 ### Totals
 
@@ -882,11 +980,11 @@ unit that teaches it; capstones reuse but do not replace that unit.
 
 | Official bullet | Primary unit | How |
 |---|---|---|
-| Configure Azure Storage firewalls and virtual networks | A07 | Bicep; confirm with `[CLI]` |
+| Configure Azure Storage firewalls and virtual networks | A10 | Bicep (VNet rules / service endpoints on a storage account, with the other private-access work); confirm with `[CLI]` |
 | Create and use shared access signature (SAS) tokens | A07 | `[CLI]` (tokens are runtime) |
 | Configure stored access policies | A07 | Bicep and/or `[CLI]` |
 | Manage access keys | A07 | `[CLI]` |
-| Configure identity-based access for Azure Files | A07 | Bicep + `[CLI]` |
+| Configure identity-based access for Azure Files | A08 | Bicep + `[CLI]`, after the file share is created |
 | Create and configure storage accounts | A06 | Bicep `[WRITE]` |
 | Configure Azure Storage redundancy | A06 | Bicep `[MODIFY]` / `[PREDICT]` |
 | Configure object replication | A06 | Bicep and/or `[CLI]` |
@@ -906,8 +1004,8 @@ unit that teaches it; capstones reuse but do not replace that unit.
 | Interpret an ARM template or a Bicep file | A00, A01 | `[EXPLAIN]` / `[PREDICT]` / `[MODIFY]` |
 | Modify an existing ARM template | A01 | `[MODIFY]` on ARM JSON |
 | Modify an existing Bicep file | A00, A01 | `[MODIFY]` |
-| Deploy resources by using an ARM template or a Bicep file | A01, later `[LAB]`s | `[LAB]` after A02 |
-| Export a deployment as an ARM template or compile a deployment as a Bicep file | A01 | `bicep build` / decompile offline; export `[CLI]` / `[LAB]` |
+| Deploy resources by using an ARM template or a Bicep file | A02 (first live), later `[LAB]`s | A01 is offline only (author, validate, what-if fixture). First live deploy is the A02 budget / action-group `[LAB]`, which may include a small A01-style template |
+| Export a deployment as an ARM template or compile a deployment as a Bicep file | A01, A02 | A01: offline `bicep build` / decompile from a fixture or a compiled template. A02: live export of the budget-lab deployment as ARM or Bicep |
 | Create a virtual machine | A12 | Bicep `[WRITE]` + optional `[LAB]` |
 | Configure Azure Disk Encryption | A12 | Bicep and/or `[EXPLAIN]` / `[LAB]` |
 | Move a virtual machine to another resource group, subscription, or region | A12 | `[CLI]` / `[PORTAL]` `[LAB]` |
@@ -998,7 +1096,7 @@ LearnAzureByGrinding/
 │   ├── AzGrinding.psd1 / .psm1    shared Pester helpers, assert conventions, id printing
 │   └── templates/            optional skeletons used only by authors, not students
 ├── units/aNN-<slug>/         LESSON.md, eNN-<slug>/, drills/rNN-<slug>/, lesson-demo/
-├── capstones/cN-<name>/
+├── capstones/cN-<name>/     LESSON.md or README, eNN-<slug>/ (same format as units)
 └── solutions/                mirrors units/ (including drills/) and capstones/
 ```
 
@@ -1017,14 +1115,17 @@ so Phase 1 infra and Phase 2 authors share one layout. They are not created in t
 
 ### 7.1 LESSON.md
 
-120–250 lines. Authors may go to 300 on a dense operational unit if every section is
-load-bearing; longer than that is a signal to split. Sections, in this order (headings
-exactly as written):
+The usual range is 120–250 lines. The **default cap is 300 lines**. A01, A05, A12,
+A14, and A16 may go to **450 lines**; the lesson (or its AUTHORING entry) must include
+a one-line note that the exception was used. Do not raise the default, and do not
+allow a silent overrun of 300 (or of 450 on an excepted unit). Longer than the cap
+that applies is a signal to split. Sections, in this order (headings exactly as
+written):
 
 ```markdown
 # ANN: Title
 
-## Organizer
+## Advance organizer
 What the unit is for, what changes in the reader's thinking, what they must already know
 (by unit id), and a short "after this unit you can" list.
 
@@ -1041,7 +1142,8 @@ it is wrong. Neighbouring problems only: never an exercise's solution.
 
 ## Official docs
 Exact Microsoft Learn pages (and `az` / PowerShell command pages) that exist today; re-check
-URLs when the unit is authored.
+URLs when the unit is authored. Official docs are **reference, not the reading.** The
+lesson is the reading; the links are where a student goes to confirm or go deeper.
 
 ## Check yourself
 3–5 production questions, answers in one <details> block.
@@ -1077,8 +1179,14 @@ Microsoft.Storage/storageAccounts with supportsHttpsTrafficOnly true"; "lab-down
 the resource group"; "ANSWER.md names the two change types").
 
 ## Verify
-The exact commands: usually `pwsh -File ../../../../scripts/verify-all.ps1 -Only <path>`
-or a local `Invoke-Pester`, plus `lab-up` / `lab-down` when tagged `[LAB]`.
+The exact commands, with a path that matches the file's depth, plus `lab-up` /
+`lab-down` when tagged `[LAB]`, or a local `Invoke-Pester`:
+
+- from `units/aNN-<slug>/eNN-<slug>/`: `pwsh -File ../../../scripts/verify-all.ps1 -Only <path>`
+- from `units/aNN-<slug>/drills/rNN-<slug>/`: `pwsh -File ../../../../scripts/verify-all.ps1 -Only <path>`
+- from `capstones/cN-<name>/eNN-<slug>/`: `pwsh -File ../../../scripts/verify-all.ps1 -Only <path>`
+  (capstones use `eNN` folders under the capstone, the same layout as units; do not
+  place the exercise files at the capstone root.)
 ```
 
 - State the **goal**, the **constraints**, and **how to verify**. Never a step list that
@@ -1089,6 +1197,11 @@ or a local `Invoke-Pester`, plus `lab-up` / `lab-down` when tagged `[LAB]`.
   contains exactly the advertised defects; a second author confirms.
 - `[LAB]` READMEs state the expected cost class, the teardown command, and that A02's
   budget must already be in place.
+- When the exercise requires `ANSWER.md`, the README lists the required headings
+  (and `exercise.psd1` repeats them in `AnswerHeadings`). verify-all fails if the
+  file is missing, is empty or whitespace-only, or is missing any of those headings.
+  CI does not grade the quality of the prose. A shipped solution `ANSWER.md`, if any,
+  is a model answer, not a hash the student must match.
 
 ### 7.3 Drill README.md
 
@@ -1101,17 +1214,29 @@ or a local `Invoke-Pester`, plus `lab-up` / `lab-down` when tagged `[LAB]`.
 ## Verify           the structural tests, via verify-all or Invoke-Pester
 ```
 
+The unit-level `units/aNN-<slug>/drills/README.md` is a different file, and Monk owns
+it. It is not a lesson. It states the short purpose of the drill set, how to use
+`scripts/rep.ps1`, that there are no hints, and a list of `rNN-<slug>` entries with
+one-line goals.
+
 ### 7.4 `exercise.psd1` (exercise, drill, and solution: identical except where a tag allows)
 
 Every exercise, drill, and solution directory has a small manifest:
 
 ```powershell
 @{
-    Tag              = 'WRITE'          # words: WRITE MODIFY DRILL BUG PREDICT WHATIF EXPLAIN LAB PORTAL CLI NO-LIVE
-    Entry            = 'main.bicep'     # or azuredeploy.json for an ARM MODIFY
-    Test             = 'main.tests.ps1'
-    ExpectResources  = @('Microsoft.Storage/storageAccounts')
-    ExpectOutputs    = @('storageAccountName')  # optional
+    Tags              = @('WRITE')      # first tag is primary; modifiers e.g. @('WRITE', 'LAB')
+                                        # a drill is always Tags = @('DRILL')
+    Entry             = 'main.bicep'    # or azuredeploy.json, or main.ps1 for a CLI drill
+    Test              = 'main.tests.ps1'
+    StudentRegion     = 'below-marker'  # below-marker | above-marker | whole-file
+    ExpectResources   = @('Microsoft.Storage/storageAccounts')  # [WRITE]: types that must appear
+    ExpectOutputs     = @('storageAccountName')                 # optional
+    ExpectProperties  = @(
+        @{ ResourceType = 'Microsoft.Storage/storageAccounts'; Path = 'sku.name'; Value = 'Standard_GRS' }
+    )                                   # [MODIFY]: the starter already has the type
+    ExpectDiagnostics = @()             # [BUG]: exact lint or PSRule rule ids the starter may fail
+    AnswerHeadings    = @()             # required ANSWER.md headings, if any
 }
 ```
 
@@ -1131,19 +1256,22 @@ which scripts detect by walking up to `docs/SPEC.md`.
   (ARM JSON exercises use a `"_comment": "---- Your resources go below this line. ----"`
   in a documented place, or a sibling `resources.json` the template references — Phase 1
   infra picks one convention and `AUTHORING-INFRA.md` states it.)
-- Everything above the marker, and every file without a marker (`main.tests.ps1`,
-  `exercise.psd1`, shipped parameter files, fixtures), is the shipped harness. The
-  solution must keep that part **byte-identical**. `[BUG]`, `[EXPLAIN]`, and some
-  `[MODIFY]` / `[PORTAL]` files may change above the line when the defect or the edit
-  lives there; then `exercise.psd1` marks the exception and only the test harness and
-  manifest stay identical (the same exemption the C course gives `[BUG]` / `[DESIGN]`
-  headers).
+- `StudentRegion` on the manifest is `'below-marker'`, `'above-marker'`, or
+  `'whole-file'`. The default is `'below-marker'`: the student writes below the shipped
+  marker comment. `'above-marker'` is the named field for the documented exception
+  where the student edits the template *above* a shipped test or harness region (for
+  example a `[BUG]` or some `[MODIFY]` / `[PORTAL]` work whose defect lives there).
+  `'whole-file'` is for `ANSWER.md`-only work or full-file edits. Harness byte-identity
+  compares files outside the student region as defined by this field. Files that are
+  never in the student region (`main.tests.ps1`, `exercise.psd1`, shipped parameter
+  files, fixtures) stay byte-identical in the solution.
 - The notice, verbatim, in every WRITE / DRILL / MODIFY README:
 
-  > **This starter is supposed to fail its tests, on purpose.** It is valid Bicep (or
-  > valid ARM JSON) and it compiles. The resources or changes you must write are not
-  > there yet, so the structural tests fail. There are no placeholder resources, and
-  > nothing to uncomment or delete to make the tests pass.
+  > **This starter is supposed to fail its tests, on purpose.** A Bicep or ARM starter
+  > is valid and it compiles. A CLI/PowerShell drill starter is valid PowerShell and
+  > it parses. The resources, property changes, or commands you must write are not
+  > there yet, so the tests fail. There are no placeholder resources, and nothing to
+  > uncomment or delete to make the tests pass.
 
 ### 7.6 Solutions
 
@@ -1161,22 +1289,48 @@ nothing failed, nothing was skipped silently, and at least one item was checked.
 
 ### 7.8 Unit composition and voice
 
-Per unit (A17 may loosen this; it is a review):
+Per unit, these are the rules. A05 and A17 have explicit exemptions below; that is the
+rule for those units, not a loosening of this list.
 
-- at most 5 `[WRITE]` (or combined `[WRITE]` + `[MODIFY]` counting toward the same cap);
+- A unit may have **at most 5** exercises tagged `[WRITE]` or `[MODIFY]` — those two
+  tags **share the cap**.
 - at least 1 `[BUG]`;
 - at least 1 `[PREDICT]` or `[WHATIF]`;
 - at least 1 `[PORTAL]` or `[CLI]` where section 5 names a portal- or CLI-only skill for
   that unit; units with no such skill (A00, most of A06) are exempt;
 - 2–3 drills, except A17 (0–1).
 
-Sizes: XS (< 15 lines of student Bicep, or a short CLI drill), S (< 40), M (40–150),
-L (150–300, capstones and the heavier labs).
+**A05 exemptions:** no required `[BUG]` or `[WHATIF]`. At least one `[PREDICT]` against
+a CLI fixture is allowed and satisfies the predict slot. At least one `[PORTAL]` or
+`[CLI]`. Drills are CLI-script drills (section 4.2). `[WRITE]` / `[MODIFY]` are not
+required; include them only if a slice is genuinely Bicep-able (for example a role
+assignment).
+
+**A17 exemptions:** no required `[WRITE]`, `[MODIFY]`, `[BUG]`, or `[WHATIF]`. The unit
+is `[PREDICT]`, `[EXPLAIN]`, `[PORTAL]` / `[CLI]` walkthroughs, and practice-assessment
+work.
+
+**Size.** Bicep-primary `[WRITE]` / `[MODIFY]` / `[BUG]` keep **S < 40**, **M 40–150**,
+**L 150–300** lines of student Bicep (XS, if used, is < 15). For `[PORTAL]`, `[CLI]`,
+`[EXPLAIN]`, `[PREDICT]`, `[WHATIF]`, and CLI drills, size is **time**: **S ≤ 25
+minutes**, **M 25–60**, **L 60–120**. An exercise that mixes both uses the larger of
+the two measures. Drill READMEs still use XS or S.
 
 Voice: adult, specific, plain. Second person, present tense, active. No cheerleading, no
 filler, no "simply," no "it is important to note." One term per concept, defined at first
 use. Contrasts belong in tables with every cell filled. Anything load-bearing in a code
 block is also said in prose.
+
+### 7.9 Capstones and `lesson-demo/`
+
+Capstones live at `capstones/cN-<name>/` with a unit-level `LESSON.md` or README plus
+`eNN-<slug>/` exercise folders that use the same format as unit exercises (README,
+`exercise.psd1`, starter, tests). Relative verify paths are in section 7.2.
+
+`lesson-demo/` (under a unit, when present) is a **complete, already-passing** example
+referenced from `LESSON.md`. Lint, `bicep build`, and PSRule must pass. There is no
+starter/solution split, and it is not listed in verify-all's fail-until-worked table:
+it must pass the way a solution does.
 
 ## 8. Harness design
 
@@ -1202,12 +1356,18 @@ CI runs lint, selftest, and verify-all, then a dirty-tree check. It never runs `
 
 1. No `#disable-next-line` used to hide a missing resource; no `#error`-style stop; no
    commented-out resource the tests would accept if uncommented.
-2. `bicep build` and `bicep lint` (with the repo config) succeed, or the ARM JSON parses.
+2. For Bicep/ARM: `bicep build`, `bicep lint` (with the repo config), and PSRule succeed,
+   or the ARM JSON parses and is lint- and PSRule-clean. For a CLI/PowerShell drill: the
+   starter script parses.
 3. `Invoke-Pester` on `main.tests.ps1` **fails**.
-4. The failure is a failed structural assertion about `ExpectResources` /
-   `ExpectOutputs` (or the documented `[MODIFY]` change), not a compile error and not a
-   missing file.
-5. The verdict line reads `scaffold OK: structural tests fail pending: Microsoft.Storage/storageAccounts …`.
+4. For `[WRITE]` (and Bicep drills) the failure is a failed structural assertion about
+   `ExpectResources` / `ExpectOutputs`. For `[MODIFY]` it is a failed assertion about
+   `ExpectProperties` — the resource type is already present; the starter is not
+   required to omit it. For a CLI/PowerShell drill, the failure is that the script does
+   not yet implement the required commands. The failure is not a compile or parse error,
+   not an unexpected lint or PSRule error, and not a missing file.
+5. The verdict line reads `scaffold OK: structural tests fail pending: …` and names the
+   missing types, properties, or commands.
 
 ### 8.3 Solution pass rule
 
@@ -1217,17 +1377,21 @@ CI runs lint, selftest, and verify-all, then a dirty-tree check. It never runs `
    byte-identical (section 7.5).
 4. Every `capture*.txt` matches the current source hash of the files it claims to come
    from. A mismatch is `STALE`.
-5. `[BUG]` solutions pass the lint, PSRule, or Pester check the starter failed, and
-   include `NOTES.md` (the student's artefact is still `ANSWER.md` in the unit tree, which
-   is not what verify-all grades on CI).
+5. `[BUG]` solutions pass the lint, PSRule, or Pester check the starter failed (they are
+   clean of every id in `ExpectDiagnostics`), and include `NOTES.md`.
+6. If the exercise requires `ANSWER.md`, verify-all fails when the file is missing, is
+   empty or whitespace-only, or is missing any heading listed in the exercise README
+   and/or in `AnswerHeadings`. CI does not grade the quality of the prose. A shipped
+   solution `ANSWER.md`, if any, is a model answer, not a hash the student must match.
 
 ### 8.4 Done means clean everywhere (student-facing)
 
 An exercise is done when:
 
 - its automated offline checks pass on the work the student wrote (or, for `[EXPLAIN]` /
-  `[PREDICT]`, `ANSWER.md` is complete and the shipped checks still pass);
-- for `[BUG]`, `ANSWER.md` has the mechanism;
+  `[PREDICT]`, `ANSWER.md` has the required headings and is non-empty, and the shipped
+  checks still pass);
+- for `[BUG]`, `ANSWER.md` has the required headings, including the mechanism;
 - for `[LAB]`, post-deploy assertions ran, **and** `lab-down` has been run, **and**
   `sweep.ps1` shows nothing unexpected for that prefix;
 - no `out/` or compiled JSON has been left for commit.
@@ -1239,11 +1403,14 @@ is not an exercise, drill, lesson demo, `LESSON.md`, or `drills/README.md` is pr
 `SKIP` row with its path and the reason, and counted. A clean tree for CI is **0 failed
 and 0 skipped** (or a documented, explicit allow-list if a later pin requires one — the
 default is zero). Missing solutions for `WRITE`, `DRILL`, `MODIFY`, and `BUG` are
-failures, not skips. Orphan solutions are failures.
+failures, not skips. Orphan solutions are failures. A `lesson-demo/` is walked and
+must pass like a solution; it is not a fail-until-worked starter.
 
-`[LAB]`, live `[WHATIF]`, and live `[CLI]` steps are not "skipped" in verify-all: they are
-out of scope for the offline run, and the offline artefacts for those exercises are still
-checked. A comment in the verify row may say `offline only; live steps not run`.
+`[LAB]` live steps are not "skipped" in verify-all: they are out of scope for the offline
+run, and the offline artefacts for those exercises are still checked. A comment in the
+verify row may say `offline only; live steps not run`. `[NO-LIVE]` is implicit except
+on `[LAB]`; tests or scripts that would call `az`, `Connect-AzAccount`, or ARM without
+a mock or fixture fail the exercise.
 
 ### 8.6 Self-tests
 
@@ -1445,13 +1612,15 @@ is off unless someone with repo access starts it by hand, and must not leave
 billable resources behind. Phase 1 infra may add the workflow file; this spec-only
 drop does not.
 
-**What federated credentials (OIDC) are, in plain language.** GitHub Actions can
-prove "this job is a run of this workflow, in this repository, on this branch or
-environment" without storing a password. At the start of the job, GitHub issues a
-**short-lived signed JWT** (an OpenID Connect token). Microsoft Entra ID has a
-**federated credential** on an app registration or a user-assigned managed identity
-that trusts GitHub's token issuer (`https://token.actions.githubusercontent.com`)
-only when the token's subject matches a specific repo, branch, and/or environment.
+**What federated credentials (OIDC) are, in plain language.** The Entra identity is
+the app registration (or user-assigned managed identity) in the personal tenant that
+GitHub Actions presents itself as. GitHub Actions can prove "this job is a run of this
+workflow, in this repository, in this GitHub Environment" without storing a password.
+At the start of the job, GitHub issues a **short-lived signed JWT** (an OpenID Connect
+token). Microsoft Entra ID has a **federated credential** on that identity that trusts
+GitHub's token issuer (`https://token.actions.githubusercontent.com`) only when the
+token's subject matches the configured repo and Environment. The federated subject is
+**pinned to a GitHub Environment with a required reviewer**, not to a wildcard branch.
 Entra then issues a short-lived Azure access token for that identity. Official docs:
 <https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure-openid-connect>
 and
@@ -1460,9 +1629,11 @@ and
 **Why there are no stored secrets.** There is no client secret or certificate in
 GitHub Secrets to leak, expire, or rotate. The workflow may still hold the
 *identifiers* (tenant id, subscription id, client id), which are not credentials.
-The trust is scoped: a workflow in another repository, or on a branch the
-federated credential does not name, cannot exchange a token for that Azure
-identity. The default CI legs still do not log in to Azure at all.
+The trust is scoped: a workflow in another repository, or a job that is not a run
+of the named Environment, cannot exchange a token for that Azure identity. The
+required reviewer on the Environment is what makes a `workflow_dispatch` live-smoke
+a deliberate act, not an accidental push to a matching branch. The default CI legs
+still do not log in to Azure at all.
 
 ## 12. Authoring split and phases
 
@@ -1506,20 +1677,29 @@ scaffolds and says so; Bruce pushes only `solutions/<those units>/**` to the sam
 Jack does not push again unless Bruce asks. Nobody pushes to a branch while its owner is
 working on it. A PR touches only paths its author owns.
 
+**Slug and title handshake.** When a unit is assigned, Jack proposes a list of
+`eNN-<slug>` + title + tag (and drill slugs). Monk writes the `LESSON.md` exercise
+table (and the unit-level `drills/README.md` list) from that exact list. Neither
+changes a slug or a title without the other. The same rule will be repeated in
+`docs/AUTHORING.md` when Phase 1 writes that file.
+
 Technical doubts go in the author's own `docs/review/<name>.md`, with unit, file, quoted
 text, and the doubt. Bruce resolves them in review.
 
 ### 12.3 Rules every author follows
 
-- Every `[WRITE]`, `[DRILL]`, and `[MODIFY]` starter fails its structural test until the
-  student does the real work, and compiles cleanly before that. No stubs, no stop lines.
+- Every `[WRITE]`, `[DRILL]`, and `[MODIFY]` starter fails its structural or script test
+  until the student does the real work, and compiles or parses cleanly before that (and,
+  for Bicep, is lint- and PSRule-clean). No stubs, no stop lines. `[BUG]` starters
+  build, and may fail only the diagnostics named in `ExpectDiagnostics`.
 - Solutions live only in `solutions/`, pass verify-all on both CI legs, and keep the
-  shipped harness byte-identical.
+  shipped harness byte-identical outside the `StudentRegion`.
 - No README links to solutions.
 - No build artefacts in a commit or left in the tree.
 - `[LAB]` exercises obey section 10. Authors must not add a lab that creates Firewall,
-  VPN Gateway, or other out-of-scope billable resources.
-- Never invent tool or portal output.
+  VPN Gateway, or other out-of-scope billable resources. There is no `[LAB]` in A01.
+- Never invent tool or portal output. A what-if or other capture is real command output,
+  or the file contains `OUTPUT-PENDING` (which fails verify-all and blocks merge).
 - Agents never merge; Nathan merges.
 
 ## 13. Decisions
@@ -1536,8 +1716,9 @@ record (and are written into the sections they affect):
    README). This SPEC and the student README land on branch `docs/spec` as PR #1
    targeting `main`. **Agents never merge; Nathan merges.** Phase 2 (units and
    exercises) starts only after that merge. Monk and Jack Gable will be asked to
-   review PR #1 once it is open. This drop does not author Phase 1 scripts, CI
-   workflows, units, exercises, or solutions.
+   review PR #1 once it is open. PR #1 was merged to `main` on 21 November 2026.
+   This drop does not author Phase 1 scripts, CI workflows, units, exercises, or
+   solutions.
 2. **Tenant and subscription.** Use the personal MSA
    `MayTheSForceBeWithYou@gmail.com`: its Default Directory Entra tenant and its
    Azure subscription (Free Account if still eligible, otherwise PAYG) for resource
@@ -1607,7 +1788,47 @@ Nathan's Windows machine during Phase 1 infra, then to write into
   `units/` (as D01 did in the data-structures course) or only with throwaway
   fixtures under `scripts/selftest.ps1` is chosen when the harness is written.
 
+### 13.4 Resolved decisions (21 November 2026)
+
+Resolutions of the exercise/drill review (Jack Gable) and the pedagogy review
+(Monk), decided by Bruce as SPEC owner, and written into the sections they affect.
+The short list is in the 0.3 changelog.
+
 ## 14. Changelog
+
+- 0.3 (21 November 2026): resolutions of the exercise/drill review (Jack Gable) and
+  the pedagogy review (Monk), decided by Bruce as SPEC owner.
+
+  Jack Gable (exercise and drill format): CLI/PowerShell drills parse and fail a
+  Pester test against a fixture or `az` / `Get-Az*` mock, with a test hook so
+  verify-all never logs in; `[MODIFY]` uses `ExpectProperties` while `[WRITE]` keeps
+  `ExpectResources`; `Tags` is a string array and `StudentRegion` is
+  `below-marker` / `above-marker` / `whole-file`; exercise verify paths use
+  `../../../scripts` (the drill-depth typo is fixed) and capstones use `eNN` folders;
+  `[WRITE]` / `[MODIFY]` starters are lint- and PSRule-clean; `[BUG]` starters build
+  and may fail only `ExpectDiagnostics`; A01 is offline only and the first live
+  deploy (with a live export) is in A02; `ANSWER.md` is checked for presence and
+  required headings, not prose quality; A05 and A17 composition exemptions are
+  stated as rules, not a loosening; what-if captures are real or `OUTPUT-PENDING`;
+  `[NO-LIVE]` is implicit except on `[LAB]`; `[PORTAL]` / `[CLI]` default to an
+  offline fixture; size is lines for Bicep-primary work and time for portal/CLI/
+  explain/predict/what-if and CLI drills; `[WRITE]` and `[MODIFY]` share a cap of 5
+  per unit; A12 and A14 may combine bullets without raising targets; `lesson-demo/`
+  is an already-passing example.
+
+  Monk (pedagogy and sequencing): A07 no longer depends on VNets or Azure Files
+  (storage VNet/service-endpoint firewalls move to A10; identity-based Azure Files
+  access moves to A08); A01 offline export/decompile plus A02 live export; A05 hard
+  tenant refusal via `expectedEntraTenantId`; `## Advance organizer`; official docs
+  are reference, not the reading; LESSON.md default cap 300, with a documented 450
+  exception for A01, A05, A12, A14, and A16; slug/title handshake between Jack and
+  Monk; unit-level `drills/README.md` format; capstones after A04 / A11 / A16; OIDC
+  identity defined and federated subject pinned to a GitHub Environment with a
+  required reviewer; MSA wording no longer implies Microsoft created the Gmail
+  address; "simply expire" removed; break-glass sentence split; Microsoft 365
+  Developer Program fallback notes expiry; A17 Entra review uses the A05 test
+  tenant or a Learn sandbox; public README no longer carries Nathan's Windows path,
+  Gmail address, or Deloitte.
 
 - 0.2 (20 November 2026): Nathan's decisions applied. Beginner tenant and subscription
   setup (personal MSA Default Directory, disposable A05 Entra test tenant, Free vs
