@@ -2,7 +2,7 @@
 
 ## Advance organizer
 
-You have written Bicep files and understand deployments. This unit teaches cost control: how to deploy a monthly budget with alerts, how to read Azure Advisor recommendations, and how to tag and isolate lab resources so they can be found and cleaned up. This unit contains the course's first live deployment to Azure. You will deploy a budget and action group, then export the deployment. That budget gates every later resource lab: `lab-up` requires a subscription-scope budget whose name matches `.lab-env.json` `budget.name` (default `lagb-monthly`) and whose amount is greater than 0. The gate checks only the name and amount, not alerts or thresholds. `lab-up -BudgetOverride` deploys anyway with console warnings (exit code 3 on refusal).
+You have written Bicep files and understand deployments. This unit teaches cost control: how to deploy a monthly budget with alerts, how to read Azure Advisor recommendations, and how to tag and isolate lab resources so they can be found and cleaned up. This unit contains the course's first live deployment to Azure. You will deploy a budget and action group, then export the deployment. That budget gates every later resource lab: `lab-up` requires a subscription-scope budget whose name matches `.lab-env.json` `budget.name` (default `lagb-monthly`) and whose amount is greater than 0. The gate checks only the name and amount, not alerts or thresholds. Without a matching budget, `lab-up` refuses and exits with code 3. With `-BudgetOverride`, `lab-up` deploys anyway and prints console warnings only (no log file).
 
 You must already know: **A00** (Bicep language and structure) and **A01** (deployments and ARM JSON).
 
@@ -17,7 +17,7 @@ After this unit you can:
 
 ### Why budgets matter
 
-Azure bills by usage. If you create a virtual machine and leave it running, you are charged by the hour. If you create a public IP address and do not delete it, you are charged daily. A budget alerts you when spending reaches thresholds. Without a budget, you discover overages after the fact.
+Azure bills by usage. If you create a virtual machine and leave it running, you are charged by the hour. If you create a public IP address and do not delete it, you are charged hourly (Standard IPs bill about $0.005/hr). A budget alerts you when spending reaches thresholds. Without a budget, you discover overages after the fact.
 
 The course budget is set at **$10–$25 per month**. This covers the labs in units A02 through A17. The alerts fire at **50%, 80%, and 100%** of both **Actual** and **Forecasted** cost. Actual cost is what you have spent so far. Forecasted cost is what Azure predicts you will spend by the end of the billing period, based on current usage. Forecasted alerts catch runaway costs before they hit the limit.
 
@@ -148,7 +148,7 @@ You stop a VM but do not delete it. The next day, Advisor shows a Medium-impact 
 | Budget vs quota | A budget is a monitoring tool that sends alerts when spending crosses thresholds. A quota is a hard limit enforced by Azure (e.g., maximum number of cores per region). Budgets do not stop resources; quotas do. |
 | Actual cost vs Forecasted cost | Actual cost is what you have spent so far in the billing period. Forecasted cost is what Azure predicts you will spend by the end of the period, based on current usage. Forecasted alerts catch runaway costs early. |
 | Action group vs alert rule | An alert rule is a condition (e.g., "cost exceeds 50%"). An action group is a set of targets (e.g., "send email to n8@example.com"). The budget defines alert rules and references an action group. The action group is reusable: multiple budgets can reference the same action group. |
-| Stopped VM vs Stopped (deallocated) VM vs deleted VM | **Stopped** (not deallocated) still bills compute, disks, and public IPs. **Stopped (deallocated)** stops the compute charge but disks and IPs keep billing. **Deleted** incurs no costs. To stop all charges, delete the VM. |
+| Stopped VM vs Stopped (deallocated) VM vs deleted VM | **Stopped** (not deallocated) still bills compute, disks, and public IPs. **Stopped (deallocated)** stops the compute charge but disks and IPs keep billing. **Deleted** (by default) leaves its managed OS and data disks, NIC, and public IP in place; they keep billing. Deleting the lab's resource group (`lab-down`) removes everything. |
 | Resource group tags vs resource tags | A resource group can have tags, and resources in that group can have tags. The tags are independent. Setting a tag on the resource group does not set it on the resources inside. The course requires tags on both. |
 | Lab-down vs lab-sweep | `lab-down` deletes resource groups (not individual resources). `lab-sweep` is the **student's** tool: it lists every course-tagged group and resource with its expiry and cost risk, plus soft-deleted Key Vaults. It deletes nothing and exits 1 if anything is left (the A02 guardrails group is listed separately as expected and won't fail it). |
 
@@ -162,7 +162,8 @@ These are reference, not the reading. The lesson is the reading; the links are w
 - [Azure Advisor cost recommendations](https://learn.microsoft.com/en-us/azure/advisor/advisor-cost-recommendations) — specific cost recommendations
 - [Use tags to organize Azure resources](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/tag-resources) — tag syntax and best practices
 - [Understand Azure spending](https://learn.microsoft.com/en-us/azure/cost-management-billing/understand/review-individual-bill) — how billing works
-- [az costmanagement](https://learn.microsoft.com/en-us/cli/azure/costmanagement) — CLI commands for cost management (note: budgets are not in `az costmanagement`; they are ARM resources deployed via `az deployment`)
+- [az consumption budget](https://learn.microsoft.com/en-us/cli/azure/consumption/budget) — CLI commands for budgets (what `lab-up` uses to look up the budget)
+- [Microsoft.Consumption/budgets](https://learn.microsoft.com/en-us/azure/templates/microsoft.consumption/budgets) — Bicep/ARM template reference for budgets
 - [az advisor](https://learn.microsoft.com/en-us/cli/azure/advisor) — CLI commands for Advisor
 - [az account show](https://learn.microsoft.com/en-us/cli/azure/account#az-account-show) — show the active account and subscription
 
@@ -181,7 +182,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
    The VM is deleted. `lab-down` selects **resource groups** by the `course` tag, then runs `az group delete`. That removes every resource in the group, regardless of the resource's own tags.
 
 4. **You deploy a VM with a public IP and a managed disk. You stop the VM (not deallocate). What costs remain?**  
-   Compute, the disk, and the public IP. **Stopped** (not deallocated) still bills compute. Only **Stopped (deallocated)** (`az vm deallocate`) stops the compute charge. Disks and public IPs keep billing either way. To stop all charges, delete the VM and the public IP.
+   Compute, the disk, and the public IP. **Stopped** (not deallocated) still bills compute. Only **Stopped (deallocated)** (`az vm deallocate`) stops the compute charge. Disks and public IPs keep billing either way. To stop all charges, run `lab-down` to delete the resource group (deleting the VM alone leaves disks and IPs in place by default).
 
 5. **Advisor shows a recommendation in the Cost category with Low impact. Should you act on it immediately?**  
    Not necessarily. Low impact means the cost is small. Prioritize High and Medium recommendations. Low recommendations are worth fixing when convenient, but they are not urgent. If you are over budget, fix High and Medium first.
@@ -194,7 +195,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 - Forecasted alerts catch runaway costs early by predicting end-of-month spending from current usage.
 - Every lab resource and resource group must have the five course tags (`course`, `unit`, `exercise`, `expires`, `owner`).
 - Advisor recommends improvements to existing resources; it analyzes periodically, not in real time.
-- Stopped (not deallocated) VMs bill compute, disks, and IPs; Stopped (deallocated) VMs bill disks and IPs; deleted VMs do not bill.
+- Stopped (not deallocated) VMs bill compute, disks, and IPs; Stopped (deallocated) VMs bill disks and IPs; deleting a VM by default leaves disks and IPs that keep billing; `lab-down` deletes the resource group and removes everything.
 - The first live lab deploys a budget and action group at subscription scope and exports the deployment with `az deployment sub export`.
 
 ## Exercises
