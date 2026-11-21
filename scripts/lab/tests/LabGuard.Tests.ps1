@@ -15,13 +15,14 @@ BeforeAll {
     $script:EntraTest = '33333333-3333-3333-3333-333333333333'
     $script:Corp = '44444444-4444-4444-4444-444444444444'
 
-    function New-EnvFile([hashtable]$Override = @{}) {
+    function New-EnvFile([hashtable]$Override = @{}, [string[]]$Remove = @()) {
         $o = [ordered]@{
             expectedTenantId = $script:Personal; expectedSubscriptionId = $script:Sub; expectedEntraTenantId = $script:EntraTest
             prefix = 'lagb'; location = 'eastus'; owner = 'n8'; budget = @{ name = 'lagb-monthly'; amount = 25 }
             allowedCustomDomains = @('skopekreep.com'); corporatePatterns = @()
         }
         foreach ($k in $Override.Keys) { $o[$k] = $Override[$k] }
+        foreach ($k in $Remove) { $o.Remove($k) }
         $p = Join-Path $TestDrive "lab-env-$([guid]::NewGuid().ToString('n')).json"
         $o | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $p
         $p
@@ -50,6 +51,8 @@ BeforeAll {
         $d
     }
     function Get-Calls { @($global:LabTestCalls) }
+    function Set-UpScript([string]$Dir, [string]$Body) { Set-Content -LiteralPath (Join-Path $Dir 'up.ps1') -Value "[CmdletBinding(SupportsShouldProcess)] param(`$Context, `$Tags, `$LabEnv) $Body" }
+    $script:Templates = Join-Path $labDir '../../lib/templates'
 }
 
 Describe 'lab guard (offline; az mocked)' {
@@ -59,6 +62,7 @@ Describe 'lab guard (offline; az mocked)' {
             'consumption budget list' = @([pscustomobject]@{ name = 'lagb-monthly'; amount = 25 })
             'group create'            = [pscustomobject]@{ name = 'created' }
             'deployment group create' = [pscustomobject]@{ properties = @{ provisioningState = 'Succeeded' } }
+            'deployment sub create'   = [pscustomobject]@{ properties = @{ provisioningState = 'Succeeded' } }
             'group list'              = @()
             'resource list'           = @()
             'group delete'            = $null
@@ -92,6 +96,35 @@ Describe 'lab guard (offline; az mocked)' {
             $e.expectedEntraTenantId | Should -Be $script:EntraTest
             $e.corporatePatterns | Should -Contain 'deloitte'
             $e.corporatePatterns | Should -Contain 'acme'
+        }
+    }
+
+    Describe 'Read-LabEnv budget and guardrails' {
+        It 'defaults budget.name to lagb-monthly and guardrails.resourceGroup to lagb-guardrails' {
+            $e = Read-LabEnv -Path (New-EnvFile -Remove 'budget')
+            $e.budgetName | Should -Be 'lagb-monthly'
+            $e.budgetAmount | Should -Be 25
+            $e.guardrailsResourceGroup | Should -Be 'lagb-guardrails'
+        }
+        It 'reads guardrails.resourceGroup, budget.name, budget.contactEmail' {
+            $e = Read-LabEnv -Path (New-EnvFile @{ guardrails = @{ resourceGroup = 'lagb-guard2' }; budget = @{ name = 'my-budget'; amount = 10; contactEmail = 'me@example.com' } })
+            $e.guardrailsResourceGroup | Should -Be 'lagb-guard2'
+            $e.budgetName | Should -Be 'my-budget'
+            $e.budgetContactEmail | Should -Be 'me@example.com'
+        }
+        It 'rejects a bad guardrails group name, a zero budget, and a bad email' {
+            { Read-LabEnv -Path (New-EnvFile @{ guardrails = @{ resourceGroup = 'bad name!' } }) } | Should -Throw '*guardrails.resourceGroup*'
+            { Read-LabEnv -Path (New-EnvFile @{ budget = @{ name = 'b'; amount = 0 } }) } | Should -Throw '*budget.amount*'
+            { Read-LabEnv -Path (New-EnvFile @{ budget = @{ name = 'b'; amount = 5; contactEmail = 'nope' } }) } | Should -Throw '*contactEmail*'
+        }
+        It 'Test-LabBudget needs the exact budget.name with amount > 0 (the CLI prints amount as a string)' {
+            $e = Read-LabEnv -Path (New-EnvFile)
+            $global:LabTestFake['consumption budget list'] = @([pscustomobject]@{ name = 'lagb-monthly'; amount = '25.0' })
+            Test-LabBudget -LabEnv $e | Should -BeTrue
+            $global:LabTestFake['consumption budget list'] = @([pscustomobject]@{ name = 'other-budget'; amount = '25.0' })
+            Test-LabBudget -LabEnv $e | Should -BeFalse
+            $global:LabTestFake['consumption budget list'] = @([pscustomobject]@{ name = 'lagb-monthly'; amount = '0.0' })
+            Test-LabBudget -LabEnv $e | Should -BeFalse
         }
     }
 
@@ -232,10 +265,75 @@ Describe 'lab guard (offline; az mocked)' {
             & $script:LabUp -Path $ex -EnvFile (New-EnvFile) -BudgetOverride *> $null
             $LASTEXITCODE | Should -Be 0
         }
+        It 'refuses (exit 3) an up.ps1 lab in a03 without the budget, before up.ps1 runs' {
+            $global:LabTestFake['consumption budget list'] = @()
+            $out = & $script:LabUp -Path (New-Exercise 'a03-governance' 'e02-policy-lab' -UpScript) -EnvFile (New-EnvFile) *>&1 | Out-String
+            $LASTEXITCODE | Should -Be 3
+            $out | Should -Match "no subscription budget named 'lagb-monthly'"
+            $out | Should -Not -Match 'up.ps1 ran'
+        }
+        It 'runs an up.ps1 lab in a03 with -BudgetOverride and warns' {
+            $global:LabTestFake['consumption budget list'] = @()
+            $out = & $script:LabUp -Path (New-Exercise 'a03-governance' 'e02-policy-lab' -UpScript) -EnvFile (New-EnvFile) -BudgetOverride *>&1 | Out-String
+            $LASTEXITCODE | Should -Be 0
+            $out | Should -Match 'NO A02 BUDGET'
+            $out | Should -Match 'up.ps1 ran'
+        }
+        It 'runs the A02 up.ps1 without a budget' {
+            $global:LabTestFake['consumption budget list'] = @()
+            $out = & $script:LabUp -Path (New-Exercise 'a02-cost-and-guardrails' 'e04-budget-lab' -UpScript) -EnvFile (New-EnvFile) *>&1 | Out-String
+            $LASTEXITCODE | Should -Be 0
+            $out | Should -Match 'up.ps1 ran'
+        }
+        It 'turns an up.ps1 failure into exit 1' {
+            $ex = New-Exercise 'a03-governance' 'e02-policy-lab'
+            Set-UpScript $ex "throw 'boom'"
+            $out = & $script:LabUp -Path $ex -EnvFile (New-EnvFile) *>&1 | Out-String
+            $LASTEXITCODE | Should -Be 1
+            $out | Should -Match 'boom'
+        }
         It 'does not need the budget for the A02 budget lab itself' {
             $global:LabTestFake['consumption budget list'] = @()
-            & $script:LabUp -Path (New-Exercise 'a02-cost-control' 'e04-budget-lab') -EnvFile (New-EnvFile) *> $null
+            & $script:LabUp -Path (New-Exercise 'a02-cost-and-guardrails' 'e04-budget-lab') -EnvFile (New-EnvFile) *> $null
             $LASTEXITCODE | Should -Be 0
+        }
+    }
+
+    Describe 'lib/templates/up.sub-scope.ps1 (reference subscription-scope up.ps1)' {
+        BeforeEach {
+            $script:Ex = New-Exercise 'a02-cost-and-guardrails' 'e04-budget-lab'
+            Copy-Item (Join-Path $script:Templates 'up.sub-scope.ps1') (Join-Path $script:Ex 'up.ps1')
+            Copy-Item (Join-Path $script:Templates 'up.sub-scope*.bicep') $script:Ex
+            $script:Env = New-EnvFile @{ budget = @{ name = 'lagb-monthly'; amount = 25; contactEmail = 'me@example.com' } }
+        }
+        It 'creates or reuses the persistent guardrails group and deploys the budget at subscription scope' {
+            $global:LabTestFake['consumption budget list'] = @()
+            $out = & $script:LabUp -Path $script:Ex -EnvFile $script:Env *>&1 | Out-String
+            $LASTEXITCODE | Should -Be 0 -Because $out
+            $c = Get-Calls
+            $c | Where-Object { $_ -like 'group create*' } | Should -Be @('group create --name lagb-guardrails --location eastus --tags course=LearnAzureByGrinding unit=a02-cost-and-guardrails exercise=a02-e04-budget-lab lifecycle=persistent owner=n8')
+            $d = @($c | Where-Object { $_ -like 'deployment sub create*' })
+            $d.Count | Should -Be 1
+            $d[0] | Should -Match '^deployment sub create --location eastus --name lagb-a02-budget --template-file \S+up\.sub-scope\.bicep --parameters @\S+\.json budgetName=lagb-monthly amount=25 guardrailsResourceGroup=lagb-guardrails contactEmail=me@example\.com$'
+            $c | Where-Object { $_ -like 'group create*' } | Should -Not -Match 'expires='
+            $c | Where-Object { $_ -like 'deployment group*' -or $_ -like 'account set*' -or $_ -like 'login*' } | Should -BeNullOrEmpty
+        }
+        It 'uses guardrails.resourceGroup from .lab-env.json' {
+            $e = New-EnvFile @{ guardrails = @{ resourceGroup = 'lagb-guard2' }; budget = @{ name = 'b1'; amount = 5; contactEmail = 'me@example.com' } }
+            & $script:LabUp -Path $script:Ex -EnvFile $e *> $null
+            $LASTEXITCODE | Should -Be 0
+            Get-Calls | Where-Object { $_ -like 'group create*' } | Should -Match '--name lagb-guard2 '
+            Get-Calls | Where-Object { $_ -like 'deployment sub create*' } | Should -Match 'budgetName=b1 amount=5 guardrailsResourceGroup=lagb-guard2'
+        }
+        It '-WhatIf changes nothing' {
+            & $script:LabUp -Path $script:Ex -EnvFile $script:Env -WhatIf *> $null
+            $LASTEXITCODE | Should -Be 0
+            Get-Calls | Where-Object { $_ -like 'group create*' -or $_ -like 'deployment*' } | Should -BeNullOrEmpty
+        }
+        It 'fails (exit 1) without budget.contactEmail and creates nothing' {
+            & $script:LabUp -Path $script:Ex -EnvFile (New-EnvFile) *> $null
+            $LASTEXITCODE | Should -Be 1
+            Get-Calls | Where-Object { $_ -like 'group create*' -or $_ -like 'deployment*' } | Should -BeNullOrEmpty
         }
     }
 
@@ -272,6 +370,21 @@ Describe 'lab guard (offline; az mocked)' {
             $LASTEXITCODE | Should -Be 3
             Get-Calls | Where-Object { $_ -like 'group delete*' } | Should -BeNullOrEmpty
         }
+        It 'skips a lifecycle=persistent group and says why, unless -IncludePersistent' {
+            $global:LabTestFake['group list'] = @(
+                [pscustomobject]@{ name = 'lagb-guardrails'; tags = [pscustomobject]@{ course = 'LearnAzureByGrinding'; unit = 'a02-cost-and-guardrails'; lifecycle = 'persistent'; owner = 'n8' } },
+                [pscustomobject]@{ name = 'lagb-a02-e01-tags'; tags = [pscustomobject]@{ course = 'LearnAzureByGrinding'; unit = 'a02-cost-and-guardrails'; exercise = 'a02-e01-tags' } }
+            )
+            $out = & $script:LabDown -Unit 'a02-cost-and-guardrails' -EnvFile (New-EnvFile) *>&1 | Out-String
+            $LASTEXITCODE | Should -Be 0
+            Get-Calls | Where-Object { $_ -like 'group delete*' } | Should -Be @('group delete --name lagb-a02-e01-tags --yes --no-wait')
+            $out | Should -Match 'skipped lagb-guardrails: tagged lifecycle=persistent'
+            $out | Should -Match '-IncludePersistent'
+            $global:LabTestCalls.Clear()
+            & $script:LabDown -Unit 'a02-cost-and-guardrails' -EnvFile (New-EnvFile) -IncludePersistent *> $null
+            $LASTEXITCODE | Should -Be 0
+            Get-Calls | Where-Object { $_ -like 'group delete*' } | Should -Be @('group delete --name lagb-guardrails --yes --no-wait', 'group delete --name lagb-a02-e01-tags --yes --no-wait')
+        }
         It 'Remove-LabResourceGroup refuses an untagged group outright' {
             { Remove-LabResourceGroup -Group ([pscustomobject]@{ name = 'lagb-x'; tags = $null }) -Prefix 'lagb' } | Should -Throw '*refusing to delete*'
         }
@@ -289,6 +402,25 @@ Describe 'lab guard (offline; az mocked)' {
         It 'exits 0 when nothing is left' {
             $o = & $script:LabSweep -EnvFile (New-EnvFile) *>&1 | Out-String
             $LASTEXITCODE | Should -Be 0 -Because $o
+        }
+        It 'lists persistent groups and their resources as expected and exits 0 when only they remain' {
+            $global:LabTestFake['group list'] = @([pscustomobject]@{ name = 'lagb-guardrails'; location = 'eastus'; tags = [pscustomobject]@{ course = 'LearnAzureByGrinding'; unit = 'a02-cost-and-guardrails'; lifecycle = 'persistent'; owner = 'n8' } })
+            $global:LabTestFake['resource list'] = @([pscustomobject]@{ name = 'lagb-monthly-ag'; type = 'Microsoft.Insights/actionGroups'; location = 'global'; resourceGroup = 'lagb-guardrails'; tags = [pscustomobject]@{ course = 'LearnAzureByGrinding'; unit = 'a02-cost-and-guardrails'; lifecycle = 'persistent' } })
+            $out = & $script:LabSweep -EnvFile (New-EnvFile) *>&1 | Out-String
+            $LASTEXITCODE | Should -Be 0 -Because $out
+            $out | Should -Match 'Persistent \(expected'
+            $out | Should -Match 'lagb-guardrails'
+            $out | Should -Match 'lagb-monthly-ag'
+            $out | Should -Not -Match 'Leftovers:'
+        }
+        It 'still exits 1 for real leftovers next to a persistent group, counting only the leftovers' {
+            $global:LabTestFake['group list'] = @(
+                [pscustomobject]@{ name = 'lagb-guardrails'; location = 'eastus'; tags = [pscustomobject]@{ course = 'LearnAzureByGrinding'; unit = 'a02-cost-and-guardrails'; lifecycle = 'persistent' } },
+                [pscustomobject]@{ name = 'lagb-a12-e03-vm-lab'; location = 'eastus'; tags = [pscustomobject]@{ course = 'LearnAzureByGrinding'; unit = 'a12-virtual-machines'; expires = '2026-11-20T00:00:00Z' } }
+            )
+            $out = & $script:LabSweep -EnvFile (New-EnvFile) *>&1 | Out-String
+            $LASTEXITCODE | Should -Be 1
+            $out | Should -Match 'lab-sweep: 1 leftover item'
         }
         It 'refuses (exit 3) in a corporate tenant' {
             Set-Signin -Tenant $script:Personal -User 'someone@deloitte.com'

@@ -96,3 +96,11 @@ Describe 'Enable-AzMock' {
         Test-Path function:global:az | Should -BeFalse
     }
 }
+
+Describe 'lib/templates Bicep (needs Bicep)' {
+    It 'every reference template builds and lints clean: <_>' -ForEach @(Get-ChildItem (Join-Path $PSScriptRoot '../../lib/templates') -Filter *.bicep | ForEach-Object Name) {
+        $p = Join-Path $PSScriptRoot "../../lib/templates/$_"
+        (Invoke-BicepBuild -Path $p).Errors | Should -BeNullOrEmpty
+        @(Get-LintFindings -Path $p | ForEach-Object { "$($_.RuleId): $($_.Message)" }) | Should -BeNullOrEmpty
+    }
+}

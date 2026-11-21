@@ -24,7 +24,7 @@ scripts ever calls Azure, and those three are never run by CI.
 | `scripts/selftest/` | Lib unit tests and the throwaway fixtures selftest composes into temp trees |
 | `scripts/lab/` | `lab-up.ps1`, `lab-down.ps1`, `lab-sweep.ps1`, `LabGuard.psm1`, and their offline tests |
 | `lib/AzGrinding.psd1/.psm1` | Shared helpers for exercise Pester harnesses and the scripts (section 6) |
-| `lib/templates/` | Author-only skeletons: `exercise.psd1`, `write.tests.ps1`, `modify.tests.ps1`, `cli-drill.tests.ps1` |
+| `lib/templates/` | Author-only skeletons: `exercise.psd1`, `write.tests.ps1`, `modify.tests.ps1`, `cli-drill.tests.ps1`, and the subscription-scope lab reference `up.sub-scope.ps1` + `up.sub-scope.bicep` + `up.sub-scope.action-group.bicep` (section 10) |
 | `.github/workflows/ci.yml` | Two legs, `windows-pwsh` and `ubuntu-pwsh` (section 11) |
 
 ## 2. Toolchain pins
@@ -251,7 +251,8 @@ files under `units/` and `capstones/`; Monk owns `LESSON.md`, `drills/README.md`
 ## 9. Self-test coverage
 
 `scripts/selftest.ps1` runs `scripts/selftest/AzGrinding.Tests.ps1` (template flattening incl. module
-deployments and languageVersion 2.0, Expect* helpers, ids, `ANSWER.md`, marker split, az mock), then
+deployments and languageVersion 2.0, Expect* helpers, ids, `ANSWER.md`, marker split, az mock, and
+every `lib/templates/*.bicep` builds and lints clean), then
 builds one temp course tree per case from `scripts/selftest/fixtures/` and runs verify-all on it,
 asserting exit code, required text, and an unchanged tree:
 
@@ -295,7 +296,10 @@ is ever committed). Fields:
 | `prefix` | no (`lagb`) | Resource-group prefix; groups are `<prefix>-<exercise-id>` |
 | `location` | no (`eastus`) | Lab region |
 | `owner` | no (`n8`) | `owner` tag |
-| `budget` | no | `{ "name": "lagb-monthly", "amount": 25 }`: the A02 budget lab-up looks for |
+| `budget.name` | no (`lagb-monthly`) | Name of the A02 subscription budget. The budget gate looks for exactly this name; a subscription-scope `up.ps1` deploys the budget under this name |
+| `budget.amount` | no (`25`) | Monthly amount (> 0) the A02 deployment uses. The gate does **not** compare it |
+| `budget.contactEmail` | for A02 only | Address the budget alerts and action group email; the reference `up.sub-scope.ps1` fails without it |
+| `guardrails.resourceGroup` | no (`lagb-guardrails`) | The **persistent** guardrails group (holds the budget's action group). Keep it under `<prefix>-` so `lab-down -IncludePersistent` can remove it |
 | `allowedCustomDomains` | no | Verified custom domains that are yours (e.g. `skopekreep.com` if you add it to the tenant) |
 | `corporatePatterns` | no | Extra substrings that mark a work tenant; `deloitte` is always built in |
 
@@ -314,30 +318,102 @@ The unedited example is refused (placeholder all-zero GUIDs, and the two tenants
    tenant has a verified domain that is not `*.onmicrosoft.com` and not in `allowedCustomDomains`
    (work directories always have custom domains; a personal Default Directory does not); or the
    tenant cannot be found in the tenant list.
-4. **Budget gate** (`lab-up`, resource scope, every unit after A02): no positive budget named
-   `budget.name` (or any, if unset) from `az consumption budget list`. `-BudgetOverride` deploys anyway
-   with a loud warning (SPEC 10.3).
+4. **Budget gate** (`lab-up`, resource scope, every unit except `a02-*`; it runs right after the
+   tenant/subscription/corporate guard and **before** the `up.ps1` branch, so `up.ps1` labs are gated
+   too). See *The budget gate* below.
+
+### The budget gate
+
+- **What it checks:** `az consumption budget list` (subscription scope; no `--resource-group`) returns
+  a budget whose `name` equals `budget.name` (default `lagb-monthly`) and whose `amount` is > 0 (the
+  CLI prints amounts as strings, e.g. `"25.0"`; they are parsed invariant-culture).
+- **What it does not check:** notifications/alerts, thresholds, `Forecasted` alerts, the action group,
+  the amount against `budget.amount` or any ceiling, the time period, or tags. A budget with the right
+  name and any positive amount passes. A resource-group-scope budget is not seen.
+- **Refusal:** exit code **3**, with the fix printed (do the A02 budget lab, or `-BudgetOverride`).
+- **`-BudgetOverride`:** deploys anyway and prints a banner of `Write-Warning` lines to the console.
+  That is all: no log file, no tag, nothing recorded in Azure.
+- **Unit A02** is exempt (it creates the budget). Entra-scope labs (A05) do not run the gate.
 
 ### What the scripts do once the guard passes
 
-- **lab-up**: requires the `LAB` tag; creates `<prefix>-<exercise-id>` with tags `course`, `unit`,
-  `exercise`, `expires` (UTC, default 8 h, `-ExpiresInHours`), `owner` (SPEC 10.2); deploys `up.bicep`
-  (or the entry) with `up.bicepparam` when present. An exercise that ships `up.ps1` (A05 directory
-  labs) has it run after the guard with `-Context -Tags -LabEnv -WhatIf`.
-- **lab-down**: selects only resource groups tagged `course=LearnAzureByGrinding`, named `<prefix>-…`,
-  with the matching `unit` (and `exercise` for `-Path`) tag; prints soft-delete / purge warnings for
-  Key Vault, Managed HSM, Recovery Services, Backup vaults, Azure AI services, Log Analytics, API
-  Management, App Configuration; then `az group delete --yes --no-wait`. `Remove-LabResourceGroup`
-  refuses an untagged group outright. A `down.ps1` in the exercise runs instead when present.
+Order in `lab-up`: `LAB` tag → `Read-LabEnv` → scope → `Assert-LabContext` → tags → budget gate →
+`up.ps1` (if present, then exit) → Entra lab without `up.ps1` exits 2 → resource group + deployment.
+
+- **lab-up**: requires the `LAB` tag; creates `<prefix>-<exercise-id>` with tags from `New-LabTags`:
+  `course`, `unit` (the unit folder name), `exercise`, `expires`, `owner` (SPEC 10.2); deploys
+  `up.bicep` (or the entry) with `up.bicepparam` when present. `expires` is UTC in the format
+  `yyyy-MM-ddTHH:mm:ssZ` (e.g. `2026-11-22T01:03:36Z`), default now + 8 hours, changed with
+  `-ExpiresInHours`. An exercise that ships `up.ps1` has it run instead (contract below); a throw
+  from `up.ps1` becomes exit 1.
+- **lab-down**: selects resource groups **by tags and prefix**: tagged `course=LearnAzureByGrinding`,
+  named `<prefix>-…`, with a matching `unit` tag (the unit folder name)
+  and, for `-Path`, a matching `exercise` tag. It deletes **the whole group** (`az group delete --yes
+  --no-wait`), never individual resources, after printing soft-delete / purge warnings for Key Vault,
+  Managed HSM, Recovery Services, Backup vaults, Azure AI services, Log Analytics, API Management, App
+  Configuration. `Remove-LabResourceGroup` refuses an untagged or unprefixed group outright. A
+  `down.ps1` in the exercise runs instead when present.
+- **Persistent groups:** a group tagged `lifecycle=persistent` is never deleted by lab-down unless
+  `-IncludePersistent` is passed; lab-down prints `skipped <name>: tagged lifecycle=persistent … Pass
+  -IncludePersistent to delete it.` and carries on with the rest. Only the A02 guardrails group uses
+  this tag. Its tags (`Get-LabGuardrailTags`) are the `New-LabTags` set minus `expires`:
+  `course=LearnAzureByGrinding`, `unit=a02-cost-and-guardrails`, `exercise=<the A02 exercise id>`,
+  `lifecycle=persistent`, `owner=<owner>`, and **no** `expires`. `lab-down -Unit
+  a02-cost-and-guardrails` (or `-Path` to that exercise) selects it, then skips it.
 - **lab-sweep**: list-only. Every course-tagged group and resource with type, region, `expires`,
   `EXPIRED`, and a cost-risk class (HIGH: Bastion, public IP, VM/VMSS, App Service plan, load balancer,
   Recovery Services, Firewall, VPN/App Gateway, AKS, NAT gateway; MEDIUM: disks, ACR, Container Apps
   environment, ACI, Log Analytics, DNS zones, private endpoints, Key Vault, storage), plus soft-deleted
-  Key Vaults. Exit 1 when anything is left.
+  Key Vaults. Persistent groups, and resources inside them or tagged `lifecycle=persistent`, are
+  listed in their own **Persistent (expected)** section and do not count. Exit 1 when anything else is
+  left; exit 0 when only persistent groups remain.
 
-`scripts/lab/tests/LabGuard.Tests.ps1` (37 tests) covers every refusal above in both scopes,
-including the two-tenant split, plus tagging, `-WhatIf`, budget override, unit/exercise selection,
-and soft-delete warnings. It installs a global `az` that throws, so a missed mock fails the test
+### Subscription-scope `up.ps1` (the A02 budget)
+
+Reference: `lib/templates/up.sub-scope.ps1` with `up.sub-scope.bicep` and
+`up.sub-scope.action-group.bicep`. Copy all three into the exercise folder and rename the script
+`up.ps1`. Templates live in `lib/templates/`, not under `units/`.
+
+Contract for any `up.ps1`:
+
+- `lab-up` calls `& up.ps1 -Context <ctx> -Tags <tags> -LabEnv <env> -WhatIf:<bool>` **after**
+  `Read-LabEnv`, `Assert-LabContext` (tenant, subscription, corporate checks), and the budget gate
+  (skipped for A02) have passed. `-Context` has `TenantId`, `SubscriptionId`, `User`; `-Tags` is the
+  `New-LabTags` dictionary; `-LabEnv` is the parsed `.lab-env.json` (`budgetName`, `budgetAmount`,
+  `budgetContactEmail`, `guardrailsResourceGroup`, `prefix`, `location`, `owner`, …).
+- Declare `[CmdletBinding(SupportsShouldProcess)] param($Context, $Tags, $LabEnv)`.
+- Every Azure call goes through LabGuard functions (`Invoke-LabAz`, `New-LabGuardrailsGroup`,
+  `Start-LabSubscriptionDeployment`, `New-LabResourceGroup`, …), never `az` directly, so the mocked
+  tests see it. Never `az login`, `Connect-AzAccount`, `az account set`, or any sign-in; the guard has
+  already proved which tenant and subscription are active.
+- Honour `-WhatIf` (no state change), and throw on failure (lab-up exits 1).
+
+What the reference does:
+
+1. `New-LabGuardrailsGroup`: `az group create --name <guardrails.resourceGroup> --location <location>
+   --tags course=LearnAzureByGrinding unit=a02-cost-and-guardrails exercise=<id> lifecycle=persistent
+   owner=<owner>` (no `expires`). Create is
+   idempotent, so this creates or reuses the group.
+2. `Start-LabSubscriptionDeployment`: `az deployment sub create --location <location> --name
+   lagb-a02-budget --template-file up.sub-scope.bicep --parameters @<temp tags.json>
+   budgetName=<budget.name> amount=<budget.amount> guardrailsResourceGroup=<…> contactEmail=<…>`.
+3. The template (`targetScope = 'subscription'`) deploys `Microsoft.Insights/actionGroups` (location
+   `global`, guardrail tags) into the guardrails group via a module, and a subscription-scope
+   `Microsoft.Consumption/budgets@2024-08-01` named `budget.name`: monthly, `Cost`, five notifications
+   (the per-budget maximum): Actual 50/80/100 % and Forecasted 80/100 %, each emailing `contactEmail`
+   and the action group. `startDate` defaults to the first of the current month (`utcNow('yyyy-MM-01')`);
+   pass the original start date when you redeploy in a later month.
+
+Why `Microsoft.Consumption/budgets`: it is the only Bicep/ARM budget type, and `az consumption budget
+list` reads exactly that resource (`GET /subscriptions/{id}/providers/Microsoft.Consumption/budgets`).
+A budget deployed this way at subscription scope is what the gate finds. One created in the portal
+under Cost Management → Budgets for the subscription is the same resource.
+
+`scripts/lab/tests/LabGuard.Tests.ps1` (52 tests) covers every refusal above in both scopes,
+including the two-tenant split, plus tagging, `-WhatIf`, the budget gate on `up.ps1` labs (a03 with no
+budget exits 3; `-BudgetOverride` runs and warns; A02 is exempt), exact budget-name matching,
+`.lab-env.json` defaults, the reference `up.sub-scope.ps1` (guardrails group + `az deployment sub
+create`), persistent groups in lab-down and lab-sweep, unit/exercise selection, and soft-delete warnings. It installs a global `az` that throws, so a missed mock fails the test
 instead of reaching Azure.
 
 ## 11. CI

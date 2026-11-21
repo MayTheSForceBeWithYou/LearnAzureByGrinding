@@ -7,10 +7,12 @@
   2. Checks the Azure CLI context: personal tenant + subscription for resource labs, or the
      disposable Entra test tenant for unit A05 / directory changes. Refuses a corporate-looking
      tenant (anything containing 'deloitte', or a verified custom domain not allowed in .lab-env.json).
-  3. Resource labs after A02: refuses unless the A02 budget exists (-BudgetOverride logs loudly).
-  4. Creates <prefix>-<exercise-id> with the SPEC 10.2 tags and deploys up.bicep (or the entry),
-     with up.bicepparam when present. An exercise that ships up.ps1 (A05 directory labs) has
-     that script run instead, after the guard, with -Context and -Tags.
+  3. Resource-scope labs in every unit except A02: refuses unless a subscription budget named
+     budget.name (default lagb-monthly) with amount > 0 exists. -BudgetOverride deploys anyway
+     with console warnings (no log file). This runs BEFORE the up.ps1 branch.
+  4. If the exercise ships up.ps1, runs it (guards already passed) with -Context -Tags -LabEnv
+     -WhatIf; see docs/AUTHORING-INFRA.md for the contract. Otherwise creates <prefix>-<exercise-id>
+     with the SPEC 10.2 tags and deploys up.bicep (or the entry), with up.bicepparam when present.
   Use -WhatIf for a dry run: the read-only guard calls still run; nothing is created.
   Exit codes: 0 ok, 1 az failure, 2 usage, 3 refused by the guard (SPEC 7.7).
 .EXAMPLE
@@ -42,21 +44,23 @@ try {
     Write-Host "lab-up: $scope scope OK (tenant $($ctx.TenantId)$(if ($scope -eq 'Resource') { ", subscription $($ctx.SubscriptionId)" }))"
     $tags = New-LabTags -Unit $unit -ExerciseId $id -Owner $labEnv.owner -ExpiresInHours $ExpiresInHours
 
+    if ($scope -eq 'Resource' -and $unit -notmatch '^a02(-|$)') {
+        if (-not (Test-LabBudget -LabEnv $labEnv)) {
+            if (-not $BudgetOverride) { throw [System.Exception]::new('BUDGET') }
+            Write-Warning '**************************************************************'
+            Write-Warning "lab-up: NO A02 BUDGET '$($labEnv.budgetName)' FOUND. -BudgetOverride given; deploying anyway."
+            Write-Warning '**************************************************************'
+        }
+    }
+
     $upScript = Join-Path $dir 'up.ps1'
     if (Test-Path -LiteralPath $upScript) {
         & $upScript -Context $ctx -Tags $tags -LabEnv $labEnv -WhatIf:$WhatIfPreference
+        Write-Host "lab-up: up.ps1 finished for $id$(if ($WhatIfPreference) { ' (dry run)' })"
         exit 0
     }
     if ($scope -eq 'Entra') { Write-Host "lab-up: Entra-scope labs ship an up.ps1; $Path has none"; exit 2 }
 
-    if ($unit -notmatch '^a02(-|$)') {
-        if (-not (Test-LabBudget -LabEnv $labEnv)) {
-            if (-not $BudgetOverride) { throw [System.Exception]::new('BUDGET') }
-            Write-Warning '**************************************************************'
-            Write-Warning 'lab-up: NO A02 BUDGET FOUND. -BudgetOverride given; deploying anyway.'
-            Write-Warning '**************************************************************'
-        }
-    }
     $template = if (Test-Path -LiteralPath (Join-Path $dir 'up.bicep')) { Join-Path $dir 'up.bicep' } else { Join-Path $dir $m.Entry }
     $param = Join-Path $dir 'up.bicepparam'
     $rg = Get-LabResourceGroupName -Prefix $labEnv.prefix -ExerciseId $id
@@ -67,7 +71,7 @@ try {
 } catch {
     if ($_.Exception.GetType().Name -eq 'LabGuardRefusal') { Write-Host $_.Exception.Message -ForegroundColor Red; exit 3 }
     if ($_.Exception.Message -eq 'BUDGET') {
-        Write-Host 'lab guard refused: no A02 budget found on this subscription. Do the A02 budget lab first (SPEC 10.3), or pass -BudgetOverride to deploy anyway (logged).' -ForegroundColor Red
+        Write-Host "lab guard refused: no subscription budget named '$($labEnv.budgetName)' with amount > 0 (az consumption budget list). Do the A02 budget lab first (SPEC 10.3), or pass -BudgetOverride to deploy anyway (console warning only)." -ForegroundColor Red
         exit 3
     }
     Write-Host "lab-up: $($_.Exception.Message)" -ForegroundColor Red

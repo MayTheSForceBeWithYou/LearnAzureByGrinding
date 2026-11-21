@@ -5,8 +5,10 @@
 .DESCRIPTION
   Runs the resource-scope guard, then lists every resource group and resource tagged
   course=LearnAzureByGrinding with type, region, expires tag, whether it is past expiry, and a
-  cost-risk class (SPEC 10.4). Also lists soft-deleted Key Vaults. Deletes nothing; use
-  lab-down.ps1. Exit codes: 0 nothing left, 1 leftovers found or az failure, 3 refused.
+  cost-risk class (SPEC 10.4). Also lists soft-deleted Key Vaults. Persistent groups (tag
+  lifecycle=persistent, e.g. the A02 guardrails group) and their resources are listed in their own
+  section as expected and do not count as leftovers. Deletes nothing; use lab-down.ps1.
+  Exit codes: 0 nothing left, 1 leftovers found or az failure, 3 refused.
 #>
 [CmdletBinding()]
 param([string]$EnvFile, [datetime]$Now = [datetime]::UtcNow)
@@ -21,7 +23,11 @@ try {
     $left = Get-LabLeftovers -Now $Now
     $rows = $left.Rows
     $deletedKv = @($left.DeletedKeyVaults)
-    if ($rows) { $rows | Sort-Object Risk, Name | Format-Table -AutoSize | Out-String -Width 220 | Write-Host }
+    if ($left.Persistent.Count) {
+        Write-Host 'Persistent (expected; kept by lab-down unless -IncludePersistent):' -ForegroundColor Cyan
+        $left.Persistent | Sort-Object Name | Select-Object Name, Type, Location | Format-Table -AutoSize | Out-String -Width 220 | Write-Host
+    }
+    if ($rows) { Write-Host 'Leftovers:' -ForegroundColor Yellow; $rows | Sort-Object Risk, Name | Format-Table -AutoSize | Out-String -Width 220 | Write-Host }
     foreach ($v in $deletedKv) { Write-Host "soft-deleted Key Vault: $($v.name) (purge: az keyvault purge --name $($v.name))" -ForegroundColor Yellow }
     $n = @($rows).Count + $deletedKv.Count
     if ($n) { Write-Host "lab-sweep: $n leftover item(s). Remove them with lab-down.ps1 -Unit <unit> (or -Path <exercise>)."; exit 1 }

@@ -7,7 +7,9 @@
   corporate-looking tenants, refuses without .lab-env.json). Selects only resource groups
   tagged course=LearnAzureByGrinding, named <prefix>-..., with the matching unit (and exercise)
   tag. Prints soft-delete / purge warnings (Key Vault, Recovery Services, Log Analytics, ...)
-  before deleting. An exercise that ships down.ps1 (A05 directory labs) has it run instead.
+  before deleting the whole group. Groups tagged lifecycle=persistent (the A02 guardrails group)
+  are skipped, with the reason printed, unless -IncludePersistent is given.
+  An exercise that ships down.ps1 (A05 directory labs) has it run instead.
   -WhatIf lists what would be deleted. Exit codes: 0 ok, 1 az failure, 2 usage, 3 refused.
 .EXAMPLE
   pwsh -File scripts/lab/lab-down.ps1 -Path units/a12-virtual-machines/e03-vm-lab
@@ -18,6 +20,7 @@
 param(
     [Parameter(Mandatory, ParameterSetName = 'Path')][string]$Path,
     [Parameter(Mandatory, ParameterSetName = 'Unit')][string]$Unit,
+    [switch]$IncludePersistent,
     [string]$EnvFile
 )
 $ErrorActionPreference = 'Stop'
@@ -48,7 +51,8 @@ try {
     $groups = @(Get-CourseResourceGroups -Prefix $labEnv.prefix -Unit $Unit -ExerciseId $id)
     if (-not $groups.Count) { Write-Host "lab-down: no course-tagged resource groups for $(if ($id) { $id } else { $Unit })"; exit 0 }
     foreach ($g in $groups) {
-        $r = Remove-LabResourceGroup -Group $g -Prefix $labEnv.prefix -WhatIf:$WhatIfPreference
+        $r = Remove-LabResourceGroup -Group $g -Prefix $labEnv.prefix -IncludePersistent:$IncludePersistent -WhatIf:$WhatIfPreference
+        if ($r.Skipped) { continue }
         Write-Host "lab-down: $(if ($WhatIfPreference) { 'would delete' } else { 'deleting' }) $($r.Name) ($($r.Resources) resource(s))$(if ($r.Warnings.Count) { "; $($r.Warnings.Count) soft-delete warning(s) above" })"
     }
     Write-Host 'lab-down: deletion runs in the background. Check with: pwsh -File scripts/lab/lab-sweep.ps1'

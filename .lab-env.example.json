@@ -1,12 +1,13 @@
 {
-  "$comment": "Copy to .lab-env.json (gitignored) and replace the zero GUIDs. expectedTenantId + expectedSubscriptionId = your personal Default Directory and subscription (resource labs A00-A04, A06-A17). expectedEntraTenantId = the disposable Entra test tenant used only for A05 and any script that creates or changes users, groups, guests, or directory policies; it must differ from expectedTenantId. The lab scripts refuse to run if this file is missing, if the signed-in tenant/subscription does not match, or if the tenant looks corporate (any name, domain, or account containing 'deloitte' or a corporatePatterns entry, or a verified custom domain not listed in allowedCustomDomains). See docs/AUTHORING-INFRA.md.",
+  "$comment": "Copy to .lab-env.json (gitignored) and replace the zero GUIDs. expectedTenantId + expectedSubscriptionId = your personal Default Directory and subscription (resource labs A00-A04, A06-A17). expectedEntraTenantId = the disposable Entra test tenant used only for A05 and any script that creates or changes users, groups, guests, or directory policies; it must differ from expectedTenantId. The lab scripts refuse to run if this file is missing, if the signed-in tenant/subscription does not match, or if the tenant looks corporate (any name, domain, or account containing 'deloitte' or a corporatePatterns entry, or a verified custom domain not listed in allowedCustomDomains). budget.name is the subscription budget lab-up requires before any resource lab outside A02; guardrails.resourceGroup is the persistent A02 group (tag lifecycle=persistent) that lab-down keeps unless -IncludePersistent. See docs/AUTHORING-INFRA.md.",
   "expectedTenantId": "00000000-0000-0000-0000-000000000000",
   "expectedSubscriptionId": "00000000-0000-0000-0000-000000000000",
   "expectedEntraTenantId": "00000000-0000-0000-0000-000000000000",
   "prefix": "lagb",
   "location": "eastus",
   "owner": "n8",
-  "budget": { "name": "lagb-monthly", "amount": 25 },
+  "budget": { "name": "lagb-monthly", "amount": 25, "contactEmail": "you@example.com" },
+  "guardrails": { "resourceGroup": "lagb-guardrails" },
   "allowedCustomDomains": [],
   "corporatePatterns": []
 }

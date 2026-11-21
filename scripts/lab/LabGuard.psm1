@@ -16,10 +16,14 @@
 #   - Either scope: refuse a tenant that looks corporate (name, domain, or signed-in user
 #     contains 'deloitte' or a configured pattern; or the tenant has a verified custom domain
 #     that is not explicitly allowed).
+#   - Resource scope, every unit except a02: the A02 budget must exist (Test-LabBudget).
+#   - Persistent groups (tag lifecycle=persistent, e.g. the A02 guardrails group holding the
+#     budget's action group) are never deleted by lab-down without -IncludePersistent.
 #   - Refusals throw LabGuardRefusal; the scripts turn that into exit code 3 (SPEC 7.7).
 Set-StrictMode -Version 3.0
 
 $script:CourseTag = 'LearnAzureByGrinding'
+$script:GuardrailsUnit = 'a02-cost-and-guardrails'
 $script:BuiltInCorporatePatterns = @('deloitte')
 $script:GuidPattern = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
 
@@ -77,14 +81,36 @@ function Read-LabEnv {
         prefix                 = if ($j.ContainsKey('prefix')) { [string]$j.prefix } else { 'lagb' }
         location               = if ($j.ContainsKey('location')) { [string]$j.location } else { 'eastus' }
         owner                  = if ($j.ContainsKey('owner')) { [string]$j.owner } else { 'n8' }
-        budget                 = if ($j.ContainsKey('budget')) { $j.budget } else { $null }
+        budgetName             = 'lagb-monthly'
+        budgetAmount           = 25
+        budgetContactEmail     = ''
+        guardrailsResourceGroup = 'lagb-guardrails'
         allowedCustomDomains   = @(if ($j.ContainsKey('allowedCustomDomains')) { $j.allowedCustomDomains | ForEach-Object { "$_".ToLowerInvariant() } })
         corporatePatterns      = @($script:BuiltInCorporatePatterns + @(if ($j.ContainsKey('corporatePatterns')) { $j.corporatePatterns }) |
                 ForEach-Object { "$_".ToLowerInvariant() } | Where-Object { $_ } | Select-Object -Unique)
     }
     if ($envObj.prefix -notmatch '^[a-z][a-z0-9]{1,9}$') { $r.Add('.lab-env.json: prefix must be 2-10 lowercase letters/digits, starting with a letter') }
-    if ($envObj.budget -and -not ($envObj.budget -is [System.Collections.IDictionary] -and $envObj.budget['name'] -and [double]$envObj.budget['amount'] -gt 0)) {
-        $r.Add('.lab-env.json: budget must be { "name": "...", "amount": <number > 0> }')
+    if ($j.ContainsKey('budget')) {
+        $b = $j.budget
+        if ($b -isnot [System.Collections.IDictionary]) { $r.Add('.lab-env.json: budget must be an object { "name", "amount", "contactEmail" }') }
+        else {
+            if ($b.Contains('name')) { $envObj.budgetName = [string]$b.name }
+            if ($b.Contains('amount')) { $envObj.budgetAmount = $b.amount }
+            if ($b.Contains('contactEmail')) { $envObj.budgetContactEmail = [string]$b.contactEmail }
+            if ($envObj.budgetName -notmatch '^[A-Za-z0-9_-]{1,63}$') { $r.Add('.lab-env.json: budget.name must be 1-63 letters, digits, - or _') }
+            $amt = 0.0
+            if (-not [double]::TryParse("$($envObj.budgetAmount)", [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$amt) -or $amt -le 0) { $r.Add('.lab-env.json: budget.amount must be a number > 0') }
+            else { $envObj.budgetAmount = $amt }
+            if ($envObj.budgetContactEmail -and $envObj.budgetContactEmail -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') { $r.Add('.lab-env.json: budget.contactEmail is not an email address') }
+        }
+    }
+    if ($j.ContainsKey('guardrails')) {
+        $g = $j.guardrails
+        if ($g -isnot [System.Collections.IDictionary]) { $r.Add('.lab-env.json: guardrails must be an object { "resourceGroup" }') }
+        elseif ($g.Contains('resourceGroup')) { $envObj.guardrailsResourceGroup = [string]$g.resourceGroup }
+    }
+    if ($envObj.guardrailsResourceGroup -notmatch '^[A-Za-z0-9._()-]{1,90}$' -or $envObj.guardrailsResourceGroup.EndsWith('.')) {
+        $r.Add('.lab-env.json: guardrails.resourceGroup is not a valid resource group name')
     }
     if ($r.Count) { Stop-Lab $r }
     [pscustomobject]$envObj
@@ -155,11 +181,18 @@ function Assert-LabContext {
 }
 
 function Test-LabBudget {
-    <# True when the A02 budget (by name from .lab-env.json, or any positive budget) exists on the subscription. #>
+    <#
+      True when a subscription-scope budget named .lab-env.json budget.name (default lagb-monthly)
+      with amount > 0 exists, per `az consumption budget list` (subscription scope; the CLI
+      prints amount as a string). Alerts, thresholds, Forecasted, the ceiling, and tags are NOT checked.
+    #>
     param([Parameter(Mandatory)]$LabEnv)
     $budgets = @(Invoke-LabAz -Arguments @('consumption', 'budget', 'list'))
-    $want = if ($LabEnv.budget) { [string]$LabEnv.budget['name'] } else { $null }
-    [bool](@($budgets | Where-Object { $_ -and [double]$_.amount -gt 0 -and (-not $want -or $_.name -eq $want) }).Count)
+    [bool](@($budgets | Where-Object {
+                $a = 0.0
+                $_ -and $_.name -eq $LabEnv.budgetName -and
+                [double]::TryParse("$($_.amount)", [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$a) -and $a -gt 0
+            }).Count)
 }
 
 function New-LabTags {
@@ -197,6 +230,42 @@ function Start-LabDeployment {
     $a = @('deployment', 'group', 'create', '--resource-group', $ResourceGroup, '--name', $Name, '--template-file', $TemplateFile)
     if ($ParameterFile) { $a += @('--parameters', $ParameterFile) }
     if ($PSCmdlet.ShouldProcess($ResourceGroup, "deploy $(Split-Path $TemplateFile -Leaf)")) { Invoke-LabAz -Arguments $a }
+}
+
+function Start-LabSubscriptionDeployment {
+    <# az deployment sub create (subscription scope). -Parameters are 'name=value' strings and/or a parameter file path. #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory)][string]$Location, [Parameter(Mandatory)][string]$TemplateFile, [string[]]$Parameters = @(),
+        [string]$Name = ('lagb-sub-' + [datetime]::UtcNow.ToString('yyyyMMddHHmmss')))
+    $a = @('deployment', 'sub', 'create', '--location', $Location, '--name', $Name, '--template-file', $TemplateFile)
+    if ($Parameters.Count) { $a += @('--parameters') + $Parameters }
+    if ($PSCmdlet.ShouldProcess("subscription", "deploy $(Split-Path $TemplateFile -Leaf) at subscription scope")) { Invoke-LabAz -Arguments $a }
+}
+
+function Get-LabGuardrailTags {
+    <#
+      Tags for the persistent guardrails group: the New-LabTags set minus expires, with
+      unit=a02-cost-and-guardrails and lifecycle=persistent. -Tags is lab-up's New-LabTags dictionary
+      (adds its exercise tag); without it: course, unit, lifecycle, owner.
+    #>
+    param([Parameter(Mandatory)]$LabEnv, [System.Collections.IDictionary]$Tags)
+    $t = [ordered]@{ course = $script:CourseTag; unit = $script:GuardrailsUnit }
+    if ($Tags) { foreach ($k in $Tags.Keys) { if ($k -notin 'course', 'unit', 'expires', 'lifecycle', 'owner') { $t[$k] = $Tags[$k] } } }
+    $t['lifecycle'] = 'persistent'
+    $t['owner'] = if ($Tags -and $Tags.Contains('owner')) { $Tags['owner'] } else { $LabEnv.owner }
+    $t
+}
+
+function New-LabGuardrailsGroup {
+    <# Creates or reuses (az group create is idempotent) the persistent guardrails group from .lab-env.json guardrails.resourceGroup. #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory)]$LabEnv, [System.Collections.IDictionary]$Tags)
+    New-LabResourceGroup -Name $LabEnv.guardrailsResourceGroup -Location $LabEnv.location -Tags (Get-LabGuardrailTags -LabEnv $LabEnv -Tags $Tags) -WhatIf:$WhatIfPreference
+}
+
+function Test-LabPersistent {
+    param([Parameter(Mandatory)]$Group)
+    [bool]($Group.PSObject.Properties['tags'] -and $Group.tags -and $Group.tags.PSObject.Properties['lifecycle'] -and $Group.tags.lifecycle -eq 'persistent')
 }
 
 function Get-CourseResourceGroups {
@@ -248,9 +317,14 @@ function Get-ResourceRisk {
 function Remove-LabResourceGroup {
     <# Deletes one course-tagged lab resource group after printing soft-delete warnings. Refuses an untagged group. #>
     [CmdletBinding(SupportsShouldProcess)]
-    param([Parameter(Mandatory)]$Group, [Parameter(Mandatory)][string]$Prefix)
+    param([Parameter(Mandatory)]$Group, [Parameter(Mandatory)][string]$Prefix, [switch]$IncludePersistent)
     if (-not ($Group.tags -and $Group.tags.course -eq $script:CourseTag -and $Group.name.StartsWith("$Prefix-"))) {
         Stop-Lab @("refusing to delete $($Group.name): it is not tagged course=$($script:CourseTag) with prefix '$Prefix-'")
+    }
+    if ((Test-LabPersistent -Group $Group) -and -not $IncludePersistent) {
+        $why = "skipped $($Group.name): tagged lifecycle=persistent (the A02 guardrails group; the budget's action group lives there). Pass -IncludePersistent to delete it."
+        Write-Host "lab-down: $why" -ForegroundColor Yellow
+        return [pscustomobject]@{ Name = $Group.name; Resources = 0; Warnings = @(); Skipped = $true; Reason = $why }
     }
     $res = @(Invoke-LabAz -Arguments @('resource', 'list', '--resource-group', $Group.name))
     $warn = @(Get-SoftDeleteWarnings -Resources $res)
@@ -258,7 +332,7 @@ function Remove-LabResourceGroup {
     if ($PSCmdlet.ShouldProcess($Group.name, "delete resource group ($($res.Count) resource(s))")) {
         $null = Invoke-LabAz -Arguments @('group', 'delete', '--name', $Group.name, '--yes', '--no-wait')
     }
-    [pscustomobject]@{ Name = $Group.name; Resources = $res.Count; Warnings = $warn }
+    [pscustomobject]@{ Name = $Group.name; Resources = $res.Count; Warnings = $warn; Skipped = $false; Reason = '' }
 }
 
 function Get-LabLeftovers {
@@ -282,9 +356,20 @@ function Get-LabLeftovers {
             Expires  = $exp; Expired = if ($expired) { 'EXPIRED' } else { '' }
         }
     })
-    [pscustomobject]@{ Rows = $rows; DeletedKeyVaults = $deletedKv }
+    $persistentNames = @($groups | Where-Object { Test-LabPersistent -Group $_ } | ForEach-Object name)
+    $isPersistent = {
+        param($row, $src)
+        if ($row.Type -eq 'Microsoft.Resources/resourceGroups') { return $row.Name -in $persistentNames }
+        $rg = if ($src.PSObject.Properties['resourceGroup']) { [string]$src.resourceGroup } else { '' }
+        ($rg -and ($persistentNames | Where-Object { $_ -ieq $rg })) -or (Test-LabPersistent -Group $src)
+    }
+    $all = @($groups) + @($resources)
+    $keep = [System.Collections.Generic.List[object]]::new(); $left = [System.Collections.Generic.List[object]]::new()
+    for ($i = 0; $i -lt $rows.Count; $i++) { if (& $isPersistent $rows[$i] $all[$i]) { $keep.Add($rows[$i]) } else { $left.Add($rows[$i]) } }
+    [pscustomobject]@{ Rows = @($left); Persistent = @($keep); DeletedKeyVaults = $deletedKv }
 }
 
 Export-ModuleMember -Function Invoke-LabAz, Get-LabRoot, Read-LabEnv, Get-LabScope, Test-CorporateTenant, Assert-LabContext,
 Test-LabBudget, New-LabTags, Get-LabResourceGroupName, New-LabResourceGroup, Start-LabDeployment, Get-CourseResourceGroups,
-Get-SoftDeleteWarnings, Get-ResourceRisk, Remove-LabResourceGroup, Get-LabLeftovers
+Get-SoftDeleteWarnings, Get-ResourceRisk, Remove-LabResourceGroup, Get-LabLeftovers,
+Start-LabSubscriptionDeployment, Get-LabGuardrailTags, New-LabGuardrailsGroup, Test-LabPersistent
