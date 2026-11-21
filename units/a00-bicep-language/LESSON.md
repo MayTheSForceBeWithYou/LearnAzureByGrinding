@@ -48,7 +48,7 @@ param storageAccountName string
 param skuName string
 ```
 
-Decorators appear before the `param` line. The Bicep linter enforces that every parameter has a `@description`.
+Decorators appear before the `param` line.
 
 ### Variables
 
@@ -131,14 +131,7 @@ After deployment, the caller can read these values. In the Azure CLI, `az deploy
 
 The Bicep CLI includes a linter that checks for common mistakes. Run it with `bicep lint <file>.bicep`. The linter uses a configuration file, `bicepconfig.json`, which lives at the repository root. The course configuration enables a set of rules at `warning` level. The harness treats warnings as errors: a warning fails the build.
 
-The linter catches:
-- Missing `@description` decorators on parameters
-- Hard-coded locations (use `resourceGroup().location` or a parameter)
-- API versions older than a threshold
-- Unused parameters or variables
-- Resources that should have tags
-
-You will fix linter diagnostics in every unit. Treat a linter failure as a real bug.
+The course linter configuration catches hard-coded locations (`no-hardcoded-location`), unused parameters and variables (`no-unused-params`, `no-unused-vars`), insecure patterns (several rules for secrets and secure parameters), and many other anti-patterns. You will fix linter diagnostics in every unit. Treat a linter failure as a real bug.
 
 ### Types and constraints
 
@@ -271,7 +264,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 - Every Bicep file compiles to exactly one ARM template; Bicep is a language, not a runtime.
 - Parameters are inputs, variables are internal, and outputs are returned values; only parameters cross the boundary inward.
 - A resource symbolic name is a Bicep identifier; the resource name property is what Azure stores.
-- The Bicep linter catches missing descriptions, hard-coded locations, and unused parameters; treat warnings as errors.
+- The Bicep linter catches hard-coded locations, unused parameters and variables, and security anti-patterns; treat warnings as errors.
 - Modules are Bicep files called from other Bicep files; parameter names in the call must match the module's parameter names.
 - Constraints on parameters (`minLength`, `@allowed`) are enforced at deployment time for dynamic values and at compile time for literals.
 

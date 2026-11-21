@@ -2,7 +2,7 @@
 
 ## Advance organizer
 
-You have written Bicep files and understand deployments. This unit teaches cost control: how to deploy a monthly budget with alerts, how to read Azure Advisor recommendations, and how to tag and isolate lab resources so they can be found and cleaned up. This unit contains the course's first live deployment to Azure. You will deploy a budget and action group, then export the deployment. That budget gates every later lab: the harness refuses to deploy if the budget is missing.
+You have written Bicep files and understand deployments. This unit teaches cost control: how to deploy a monthly budget with alerts, how to read Azure Advisor recommendations, and how to tag and isolate lab resources so they can be found and cleaned up. This unit contains the course's first live deployment to Azure. You will deploy a budget and action group, then export the deployment. That budget gates every later lab: `lab-up` refuses to deploy if the budget is missing (unless an explicit logged override is given).
 
 You must already know: **A00** (Bicep language and structure) and **A01** (deployments and ARM JSON).
 
@@ -177,7 +177,17 @@ The budget is subscription-scoped. The action group is resource-group-scoped. Th
 
 ### Lab resource tagging
 
-Every lab resource carries five tags: `course` (`LearnAzureByGrinding`), `unit` (folder name), `exercise` (full id), `expires` (ISO date shortly after the lab), and `owner` (your username). The `lab-down` script selects by the `course` tag. The `expires` date should be a few days after the lab; redeploy with a new date if you need resources longer.
+Every lab resource and resource group carries five tags:
+
+| Tag | Value format | Example |
+|-----|--------------|---------|
+| `course` | `LearnAzureByGrinding` (literal) | `LearnAzureByGrinding` |
+| `unit` | Unit folder name | `a02-cost-and-guardrails` |
+| `exercise` | Full exercise id | `a02-e01-budget-and-action-group` |
+| `expires` | ISO date shortly after the lab | `2026-11-30` |
+| `owner` | Your short username | `n8` |
+
+The `lab-down` script selects by the `course` tag. The `expires` date should be a few days after the lab; redeploy with a new date if you need resources longer.
 
 ### Azure Advisor
 
@@ -199,7 +209,7 @@ Tear down every lab immediately after you verify it passes. The `lab-down` scrip
 
 You stop a VM but do not delete it. The next day, Advisor shows a Medium-impact Cost recommendation: "Virtual machine is stopped but the disk remains allocated. The disk incurs charges even when the VM is not running." The disk is charged by size, whether or not the VM is running. Run `lab-down` to delete the resource group, which deletes both the VM and the disk.
 
-**The plausible wrong reading.** You might expect Advisor to alert immediately after you stop the VM. Advisor is not real-time; recommendations appear hours or days later. For real-time alerts, use Forecasted budget thresholds. Advisor catches waste you forgot to clean up.
+**The plausible wrong reading.** You might expect Advisor to alert immediately after you stop the VM. Advisor is not real-time; recommendations appear hours or days later. Budgets are also not real-time: cost data lags, and budget evaluation is periodic (typically daily). Forecasted budget thresholds catch runaway costs earlier than Actual thresholds, but neither alerts immediately. Advisor catches waste you forgot to clean up.
 
 ## Distinctions worth keeping straight
 
@@ -253,7 +263,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 - A budget alerts you when spending crosses thresholds; it does not stop resources.
 - Forecasted alerts catch runaway costs early by predicting end-of-month spending from current usage.
 - Every lab resource and resource group must have the five course tags (`course`, `unit`, `exercise`, `expires`, `owner`).
-- Advisor recommends improvements to existing resources; it does not monitor costs in real time.
+- Advisor recommends improvements to existing resources; it analyzes periodically, not in real time.
 - Stopped VMs still incur costs (disks, public IPs); deleted VMs do not.
 - The first live lab deploys a budget and action group at subscription or resource-group scope and exports the deployment.
 

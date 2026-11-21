@@ -1,5 +1,7 @@
 # A01: Deployments, what-if, and ARM JSON
 
+> Length: this lesson uses the A01 450-line exception (SPEC 7.1).
+
 ## Advance organizer
 
 You have written Bicep files that compile to ARM templates. This unit teaches deployments: how to place a deployment at resource-group, subscription, management-group, or tenant scope; how to choose Incremental vs Complete mode; how to validate and preview changes with what-if; and how to read, modify, compile, and decompile ARM JSON. You will not deploy to Azure in this unit; that starts in A02. All validation and what-if work uses fixtures.
@@ -170,18 +172,7 @@ bicep decompile main.json
 
 This creates `main.bicep` in the same directory. The Bicep file is not guaranteed to be identical to the original. Decompile is best-effort: it reconstructs Bicep syntax from JSON, but some information is lost or rewritten.
 
-What is lost:
-- Comments
-- Variable names (decompile generates new names like `var_1`)
-- Parameter names (if the JSON was hand-written and used unconventional names)
-- Module structure (JSON has no modules; decompile produces a single flat file)
-
-What is rewritten:
-- String interpolation (`'${foo}-${bar}'` may become `format('{0}-{1}', foo, bar)`)
-- Logical simplifications (`true && x` becomes `x`)
-- Literal expressions (`[concat('a', 'b')]` becomes `'ab'`)
-
-Decompile is useful when you export a deployment from the portal or a live resource group and want to edit it in Bicep. You decompile, review the generated Bicep, clean up variable names and structure, and then maintain it as Bicep.
+Decompile is useful when you export a deployment from the portal or a live resource group and want to edit it in Bicep. You decompile, review the generated Bicep, and then maintain it as Bicep.
 
 ### Validation and what-if
 
@@ -339,80 +330,35 @@ This does not work. A storage account is a resource-group-scoped resource. You c
 
 You have a resource group with one storage account: `myaccount`, SKU `Standard_LRS`. You prepare a template that includes the same storage account but changes the SKU to `Standard_GRS`, and adds a second storage account, `myaccount2`. You run what-if.
 
-The output shows:
+OUTPUT-PENDING (what-if fixture for e04)
 
-```
-Resource and property changes are indicated with this symbol:
-  + Create
-  ~ Modify
-  = No change
+What-if uses symbols to indicate change types: `+` (Create), `~` (Modify), `-` (Delete, Complete mode only), `*` (Deploy, action not determined), `=` (No change), and others for ignored or no-effect changes. When what-if predicts a modification, it shows property-level changes: which properties will change, and the old and new values. When it predicts a create, it shows the action but not the entire resource body. What-if is a diff, not a listing.
 
-~ Microsoft.Storage/storageAccounts/myaccount
-  ~ sku.name: "Standard_LRS" => "Standard_GRS"
+The reasoning for this example: The first account exists in the resource group, and the template changes the SKU. What-if will show `~` (modify) and the property change. The second account does not exist, so what-if will show `+` (create). In Incremental mode (the default), what-if does not show deletes for resources not in the template. In Complete mode, what-if would show `-` for any resource in the resource group that is not in the template.
 
-+ Microsoft.Storage/storageAccounts/myaccount2
-```
-
-The reasoning:
-1. The first account, `myaccount`, exists in the resource group. The template changes the SKU. What-if shows `~` (modify) and the property change: `Standard_LRS` becomes `Standard_GRS`.
-2. The second account, `myaccount2`, does not exist. The template creates it. What-if shows `+` (create).
-3. What-if does not show a delete. The deployment is Incremental (the default), so resources not in the template are left alone.
-
-If the deployment were Complete mode, what-if would also show `-` for any resource in the resource group that is not in the template. Complete mode deletes those resources.
-
-**The plausible wrong reading.** You might expect what-if to show the entire resource body for `myaccount2`. It does not. What-if shows only the action (`+` create) and, for updates, the changed properties. To see the full resource definition, read the template. What-if is a diff, not a listing.
+**The plausible wrong reading.** You might expect what-if to show the entire resource body for every create. It does not. What-if shows the action and, for updates, the changed properties. To see the full resource definition, read the template.
 
 ## Worked example: What a compile/decompile round trip rewrites
 
-You write a Bicep file:
+You write a Bicep file with parameters, variables, string interpolation, and a resource. You compile it with `bicep build`, producing ARM JSON. You then decompile with `bicep decompile --force`, overwriting the original. Decompile prints warnings: it is a best-effort process, and when the JSON came from Bicep, decompiling may produce less accurate results than the original.
 
-```bicep
-param location string = resourceGroup().location
-param name string
+What is always lost:
+- Comments
+- Formatting and blank lines
 
-var suffix = uniqueString(resourceGroup().id)
-var fullName = '${name}${suffix}'
+What may change:
+- Resource symbolic names (decompile may shorten or rename them)
+- Module structure (ARM JSON has nested deployments, not modules; decompile inlines them into a single flat file)
+- Logical expressions (decompile may simplify or rewrite them)
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
-  name: fullName
-  location: location
-  sku: {
-    name: 'Standard_LRS'
-  }
-  kind: 'StorageV2'
-}
-```
+What is usually preserved (but not guaranteed):
+- Parameter and variable names (when the JSON metadata includes them)
+- String interpolation syntax (decompile reconstructs `${}` from `concat` or `format` calls)
+- The resource structure and properties
 
-You compile it with `bicep build main.bicep`, producing `main.json`. You then decompile with `bicep decompile main.json`, producing a new `main.bicep`. The decompiled file looks like this:
+Decompile is best-effort. If you need the exact original Bicep, keep it in version control. Use decompile to convert exported ARM JSON to editable Bicep, not to recover lost source.
 
-```bicep
-param location string = resourceGroup().location
-param name string
-
-var var_suffix = uniqueString(resourceGroup().id)
-var var_fullName = format('{0}{1}', name, var_suffix)
-
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
-  name: var_fullName
-  location: location
-  sku: {
-    name: 'Standard_LRS'
-  }
-  kind: 'StorageV2'
-}
-```
-
-What changed:
-1. Variable names: `suffix` became `var_suffix`, and `fullName` became `var_fullName`. Decompile generates new names because the JSON does not preserve the original names.
-2. String interpolation: `'${name}${suffix}'` became `format('{0}{1}', name, var_suffix)`. ARM JSON does not have string interpolation; it uses the `format` function. Decompile reconstructs the Bicep syntax, but it may use `format` instead of `${}`.
-
-What did not change:
-- Parameters: the names and defaults are preserved.
-- The resource: the structure is identical.
-
-Decompile is best-effort. If you need the exact original Bicep, keep it in version control. Do not rely on decompile to recover the original. Use decompile to convert exported JSON to editable Bicep, not to recover lost source.
-
-**The plausible wrong reading.** You might expect decompile to be lossless: compile and decompile in a round trip, and you get the original file back. That is not true. Decompile reconstructs Bicep from JSON, and the JSON does not contain all the information the original Bicep had. Comments are lost. Variable names are generated. String interpolation may be rewritten as `format` calls. Module structure is lost (JSON does not have modules; nested deployments are inlined). Decompile is a tool for converting JSON to Bicep, not a backup mechanism.
+**The plausible wrong reading.** You might expect decompile to be lossless: compile and decompile in a round trip, and you get the original file back. Decompile is a conversion tool, not a backup mechanism. ARM JSON does not store all the information the original Bicep had. Comments are lost. Symbolic names may change. Module structure is flattened. The decompiled Bicep is valid and functionally equivalent, but it is not identical to the original.
 
 ## Distinctions worth keeping straight
 
@@ -457,7 +403,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 4. **The same resource group and template, but you deploy in Complete mode. What happens to `account2`?**  
    Azure deletes it. Complete mode deletes resources not in the template. Only `account1` remains.
 
-5. **You run what-if on a template. The output shows `~ sku.name: "Standard_LRS" => "Standard_GRS"` for a storage account. You deploy the template. What happens to the storage account?**  
+5. **You run what-if on a template. What-if predicts a modify operation on a storage account SKU property (changing from one SKU to another). You deploy the template. What happens to the storage account?**  
    Azure updates the SKU in place. The account is not deleted and recreated; the SKU property is changed. What-if correctly predicted the update.
 
 </details>
