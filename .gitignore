@@ -1,0 +1,29 @@
+# Local lab pin (tenant / subscription IDs). Never commit this.
+.lab-env.json
+
+# Student or author local parameter files
+*.local.bicepparam
+*.local.json
+
+# Verify / build artefacts
+out/
+reps/
+.psrule/
+TestResults/
+*.trx
+*.Tests.ps1.xml
+
+# Compiled ARM JSON next to a Bicep file (fixtures that must be committed are
+# named explicitly in the exercise, e.g. expected.json)
+# Keep ignore conservative: scripts write under out/ or a temp dir.
+
+# OS / editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*~
+.vscode/*.log
+
+# PowerShell / leftover
+*.bak
