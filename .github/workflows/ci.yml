@@ -1,0 +1,71 @@
+# LearnAzureByGrinding CI (SPEC 11). Offline only: no Azure sign-in, no secrets, never lab-up.
+# Toolchain pins live in scripts/toolchain.psd1 and are installed by scripts/install-tools.ps1.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: ${{ matrix.leg }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: windows-pwsh
+            os: windows-latest
+          - leg: ubuntu-pwsh
+            os: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain (Bicep CLI, Pester, PSRule, PSRule.Rules.Azure)
+        run: ./scripts/install-tools.ps1 -Ci
+
+      - name: Toolchain versions
+        run: ./scripts/install-tools.ps1 -CheckOnly
+
+      - name: Lint
+        run: ./scripts/lint.ps1
+
+      - name: Self-test of the harness
+        run: ./scripts/selftest.ps1
+
+      - name: Verify every starter, solution, and lesson demo
+        run: ./scripts/verify-all.ps1
+
+      - name: PSRule for Azure (solutions and lesson demos)
+        run: ./scripts/psrule.ps1
+
+      - name: Lab guard tests (az mocked; never signs in)
+        run: |
+          Import-Module Pester -RequiredVersion (Import-PowerShellDataFile ./scripts/toolchain.psd1).PesterVersion
+          $c = New-PesterConfiguration
+          $c.Run.Path = './scripts/lab/tests'
+          $c.Run.Exit = $true
+          $c.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $c
+
+      - name: Tree is clean (nothing written, nothing ignored left behind)
+        run: |
+          $s = git status --porcelain --ignored
+          if ($s) { Write-Host 'Working tree is not clean after the checks:'; $s | Write-Host; exit 1 }
+          Write-Host 'clean'
