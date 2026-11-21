@@ -1,8 +1,9 @@
 #Requires -Version 7.4
 <#
 .SYNOPSIS
-  Reference up.ps1 for a subscription-scope lab (the A02 budget). Copy it next to the exercise's
-  up.sub-scope.bicep and up.sub-scope.action-group.bicep, rename it up.ps1, and adjust.
+  Reference up.ps1 for a subscription-scope lab (the A02 budget). Copy it and the skeleton
+  up.sub-scope.bicep into the exercise folder, rename it up.ps1, and put the exercise's own
+  resources in the Bicep (the skeleton deploys nothing).
 .DESCRIPTION
   Contract (docs/AUTHORING-INFRA.md, "Subscription-scope up.ps1"):
   - lab-up.ps1 calls it as: & up.ps1 -Context <ctx> -Tags <tags> -LabEnv <env> -WhatIf:<bool>
@@ -14,7 +15,8 @@
   - Creates or reuses the persistent guardrails group (.lab-env.json guardrails.resourceGroup,
     default lagb-guardrails; tags = lab-up's New-LabTags set minus expires, with
     unit=a02-cost-and-guardrails and lifecycle=persistent),
-    then runs az deployment sub create with the budget named budget.name (default lagb-monthly).
+    then runs az deployment sub create on up.sub-scope.bicep, passing budget.name (default
+    lagb-monthly) as budgetName.
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -42,4 +44,4 @@ try {
             "guardrailsResourceGroup=$($LabEnv.guardrailsResourceGroup)", "contactEmail=$contact") `
         -WhatIf:$WhatIfPreference
 } finally { Remove-Item -LiteralPath $tagsFile -Force -ErrorAction SilentlyContinue -WhatIf:$false }
-Write-Host "up.ps1: budget '$($LabEnv.budgetName)' and action group in '$($LabEnv.guardrailsResourceGroup)' $(if ($WhatIfPreference) { 'would be deployed' } else { 'deployed' })."
+Write-Host "up.ps1: subscription deployment lagb-a02-budget (guardrails group '$($LabEnv.guardrailsResourceGroup)') $(if ($WhatIfPreference) { 'would run' } else { 'finished' })."

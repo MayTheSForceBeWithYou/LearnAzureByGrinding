@@ -281,7 +281,7 @@ Describe 'lab guard (offline; az mocked)' {
         }
         It 'runs the A02 up.ps1 without a budget' {
             $global:LabTestFake['consumption budget list'] = @()
-            $out = & $script:LabUp -Path (New-Exercise 'a02-cost-and-guardrails' 'e04-budget-lab' -UpScript) -EnvFile (New-EnvFile) *>&1 | Out-String
+            $out = & $script:LabUp -Path (New-Exercise 'a02-cost-and-guardrails' 'e01-budget-and-action-group' -UpScript) -EnvFile (New-EnvFile) *>&1 | Out-String
             $LASTEXITCODE | Should -Be 0
             $out | Should -Match 'up.ps1 ran'
         }
@@ -294,16 +294,16 @@ Describe 'lab guard (offline; az mocked)' {
         }
         It 'does not need the budget for the A02 budget lab itself' {
             $global:LabTestFake['consumption budget list'] = @()
-            & $script:LabUp -Path (New-Exercise 'a02-cost-and-guardrails' 'e04-budget-lab') -EnvFile (New-EnvFile) *> $null
+            & $script:LabUp -Path (New-Exercise 'a02-cost-and-guardrails' 'e01-budget-and-action-group') -EnvFile (New-EnvFile) *> $null
             $LASTEXITCODE | Should -Be 0
         }
     }
 
     Describe 'lib/templates/up.sub-scope.ps1 (reference subscription-scope up.ps1)' {
         BeforeEach {
-            $script:Ex = New-Exercise 'a02-cost-and-guardrails' 'e04-budget-lab'
+            $script:Ex = New-Exercise 'a02-cost-and-guardrails' 'e01-budget-and-action-group'
             Copy-Item (Join-Path $script:Templates 'up.sub-scope.ps1') (Join-Path $script:Ex 'up.ps1')
-            Copy-Item (Join-Path $script:Templates 'up.sub-scope*.bicep') $script:Ex
+            Copy-Item (Join-Path $script:Templates 'up.sub-scope.bicep') $script:Ex
             $script:Env = New-EnvFile @{ budget = @{ name = 'lagb-monthly'; amount = 25; contactEmail = 'me@example.com' } }
         }
         It 'creates or reuses the persistent guardrails group and deploys the budget at subscription scope' {
@@ -311,7 +311,7 @@ Describe 'lab guard (offline; az mocked)' {
             $out = & $script:LabUp -Path $script:Ex -EnvFile $script:Env *>&1 | Out-String
             $LASTEXITCODE | Should -Be 0 -Because $out
             $c = Get-Calls
-            $c | Where-Object { $_ -like 'group create*' } | Should -Be @('group create --name lagb-guardrails --location eastus --tags course=LearnAzureByGrinding unit=a02-cost-and-guardrails exercise=a02-e04-budget-lab lifecycle=persistent owner=n8')
+            $c | Where-Object { $_ -like 'group create*' } | Should -Be @('group create --name lagb-guardrails --location eastus --tags course=LearnAzureByGrinding unit=a02-cost-and-guardrails exercise=a02-e01-budget-and-action-group lifecycle=persistent owner=n8')
             $d = @($c | Where-Object { $_ -like 'deployment sub create*' })
             $d.Count | Should -Be 1
             $d[0] | Should -Match '^deployment sub create --location eastus --name lagb-a02-budget --template-file \S+up\.sub-scope\.bicep --parameters @\S+\.json budgetName=lagb-monthly amount=25 guardrailsResourceGroup=lagb-guardrails contactEmail=me@example\.com$'

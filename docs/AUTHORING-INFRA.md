@@ -24,7 +24,7 @@ scripts ever calls Azure, and those three are never run by CI.
 | `scripts/selftest/` | Lib unit tests and the throwaway fixtures selftest composes into temp trees |
 | `scripts/lab/` | `lab-up.ps1`, `lab-down.ps1`, `lab-sweep.ps1`, `LabGuard.psm1`, and their offline tests |
 | `lib/AzGrinding.psd1/.psm1` | Shared helpers for exercise Pester harnesses and the scripts (section 6) |
-| `lib/templates/` | Author-only skeletons: `exercise.psd1`, `write.tests.ps1`, `modify.tests.ps1`, `cli-drill.tests.ps1`, and the subscription-scope lab reference `up.sub-scope.ps1` + `up.sub-scope.bicep` + `up.sub-scope.action-group.bicep` (section 10) |
+| `lib/templates/` | Author-only skeletons: `exercise.psd1`, `write.tests.ps1`, `modify.tests.ps1`, `cli-drill.tests.ps1`, and the subscription-scope lab reference `up.sub-scope.ps1` + the empty skeleton `up.sub-scope.bicep` (section 10) |
 | `.github/workflows/ci.yml` | Two legs, `windows-pwsh` and `ubuntu-pwsh` (section 11) |
 
 ## 2. Toolchain pins
@@ -357,7 +357,7 @@ Order in `lab-up`: `LAB` tag → `Read-LabEnv` → scope → `Assert-LabContext`
   `-IncludePersistent` is passed; lab-down prints `skipped <name>: tagged lifecycle=persistent … Pass
   -IncludePersistent to delete it.` and carries on with the rest. Only the A02 guardrails group uses
   this tag. Its tags (`Get-LabGuardrailTags`) are the `New-LabTags` set minus `expires`:
-  `course=LearnAzureByGrinding`, `unit=a02-cost-and-guardrails`, `exercise=<the A02 exercise id>`,
+  `course=LearnAzureByGrinding`, `unit=a02-cost-and-guardrails`, `exercise=a02-e01-budget-and-action-group`,
   `lifecycle=persistent`, `owner=<owner>`, and **no** `expires`. `lab-down -Unit
   a02-cost-and-guardrails` (or `-Path` to that exercise) selects it, then skips it.
 - **lab-sweep**: list-only. Every course-tagged group and resource with type, region, `expires`,
@@ -370,9 +370,13 @@ Order in `lab-up`: `LAB` tag → `Read-LabEnv` → scope → `Assert-LabContext`
 
 ### Subscription-scope `up.ps1` (the A02 budget)
 
-Reference: `lib/templates/up.sub-scope.ps1` with `up.sub-scope.bicep` and
-`up.sub-scope.action-group.bicep`. Copy all three into the exercise folder and rename the script
-`up.ps1`. Templates live in `lib/templates/`, not under `units/`.
+Reference: `lib/templates/up.sub-scope.ps1` with the skeleton `up.sub-scope.bicep`. Copy both into
+the exercise folder and rename the script `up.ps1`. Templates live in `lib/templates/`, not under
+`units/`. The skeleton is neutral: `targetScope = 'subscription'`, the parameters the reference
+`up.ps1` passes (`guardrailTags`, `budgetName`, `amount`, `guardrailsResourceGroup`, `contactEmail`,
+plus `startDate`, defaulting to the first of the current month), echoed as outputs so the -Werror
+lint stays clean, and **no resources**. The exercise's own Bicep supplies the budget and action group;
+templates and lessons never contain an exercise's solution.
 
 Contract for any `up.ps1`:
 
@@ -391,18 +395,19 @@ Contract for any `up.ps1`:
 What the reference does:
 
 1. `New-LabGuardrailsGroup`: `az group create --name <guardrails.resourceGroup> --location <location>
-   --tags course=LearnAzureByGrinding unit=a02-cost-and-guardrails exercise=<id> lifecycle=persistent
+   --tags course=LearnAzureByGrinding unit=a02-cost-and-guardrails exercise=a02-e01-budget-and-action-group lifecycle=persistent
    owner=<owner>` (no `expires`). Create is
    idempotent, so this creates or reuses the group.
 2. `Start-LabSubscriptionDeployment`: `az deployment sub create --location <location> --name
    lagb-a02-budget --template-file up.sub-scope.bicep --parameters @<temp tags.json>
    budgetName=<budget.name> amount=<budget.amount> guardrailsResourceGroup=<…> contactEmail=<…>`.
-3. The template (`targetScope = 'subscription'`) deploys `Microsoft.Insights/actionGroups` (location
-   `global`, guardrail tags) into the guardrails group via a module, and a subscription-scope
-   `Microsoft.Consumption/budgets@2024-08-01` named `budget.name`: monthly, `Cost`, five notifications
-   (the per-budget maximum): Actual 50/80/100 % and Forecasted 80/100 %, each emailing `contactEmail`
-   and the action group. `startDate` defaults to the first of the current month (`utcNow('yyyy-MM-01')`);
-   pass the original start date when you redeploy in a later month.
+3. The exercise's Bicep (its copy of the skeleton) adds the resources. Course conventions for A02:
+   - API version: `Microsoft.Consumption/budgets@2024-08-01` is the course API version.
+   - Scope: subscription, named `budget.name`, so the gate finds it.
+   - Alerts: an Azure budget allows **at most 5 notifications**, so the course alert set is Actual
+     50/80/100 % plus Forecasted 80/100 %.
+   - `startDate` must be the first of a month; pass the original start date when you redeploy in a
+     later month.
 
 Why `Microsoft.Consumption/budgets`: it is the only Bicep/ARM budget type, and `az consumption budget
 list` reads exactly that resource (`GET /subscriptions/{id}/providers/Microsoft.Consumption/budgets`).
