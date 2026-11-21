@@ -91,22 +91,22 @@ PowerShell 7 (`.ps1`). CI also proves the offline path on Ubuntu with `pwsh`.
 |---|---|---|---|
 | Shell | PowerShell 7.4+ (`pwsh`) | `pwsh` | `pwsh` |
 | Azure CLI | 2.76.0 or later (needed for `--validation-level`); 2.88.0 or later if a script uses `az bicep run --config` | same minimum, pinned in CI | same |
-| Bicep CLI | exact version pinned in Phase 1 infra (standalone or via `az bicep`); same pin in CI | installed at the pin | installed at the pin |
-| Pester | 5.x (not the Windows-PowerShell in-box 3.4.0) | 5.x | 5.x |
-| PSRule for Azure | `PSRule.Rules.Azure`, version pinned in Phase 1 | `microsoft/ps-rule` action | same |
+| Bicep CLI | 0.49.2, pinned in `scripts/toolchain.psd1` (standalone); same pin in CI | installed at the pin | installed at the pin |
+| Pester | 5.9.1, pinned in `scripts/toolchain.psd1` (not the Windows-PowerShell in-box 3.4.0) | 5.9.1 | 5.9.1 |
+| PSRule for Azure | `PSRule.Rules.Azure`, version and baseline pinned in `scripts/toolchain.psd1` | `scripts/psrule.ps1` and verify-all (not the `microsoft/ps-rule` action) | same |
 | Editor | VS Code + Bicep extension, optional | n/a | n/a |
 | Azure login | required only for `[LAB]`, live `[WHATIF]`, and some `[CLI]` work | **none** (no credentials in the default workflow) | none |
 
-Phase 1 infra records the exact pinned versions (Bicep CLI, PSRule.Rules.Azure, Pester 5
-minor, `microsoft/ps-rule` action tag, minimum Azure CLI) in `docs/AUTHORING-INFRA.md` and
-in the workflow file, after they have been installed and checked on Nathan's machine. This
-spec states minimums and the pin policy; it does not invent a Bicep version number that has
-not been verified here.
+Exact pinned versions live in `scripts/toolchain.psd1` (the single source of pins),
+documented in `docs/AUTHORING-INFRA.md`, and installed or checked with
+`scripts/install-tools.ps1`. Phase 1 infra recorded them on `DESKTOP-AK42M6F` and on
+both CI images (Bicep CLI 0.49.2, Pester 5.9.1, PSRule 2.9.0, PSRule.Rules.Azure
+1.47.0, baseline `Azure.Pillar.Security.L1`; see section 9). Bumps are a deliberate PR.
 
-`bicep snapshot` is **optional** in verify-all until the pinned CLI on
-`DESKTOP-AK42M6F` documents the command as stable (section 13.2). The official Bicep
-CLI page already describes it; `az bicep snapshot` does not exist, so snapshots are
-invoked as `bicep snapshot` directly.
+`bicep snapshot` exists in the pinned Bicep CLI 0.49.2 and stays **optional** in
+verify-all (section 13.3). The official Bicep CLI page already describes it;
+`az bicep snapshot` does not exist, so snapshots are invoked as `bicep snapshot`
+directly.
 
 On Windows, install Pester 5 with `-Force -SkipPublisherCheck` so it sits beside, and is
 preferred over, the in-box 3.4.0 module. All course scripts must run under `pwsh`, not
@@ -358,10 +358,23 @@ directory. Concrete steps, all of them required:
    `expectedEntraTenantId` is the disposable A05 test tenant, and is **not** the
    personal Default Directory.
 
-4. `lab-up.ps1` and `lab-down.ps1` **must** read that file and **refuse to run** if
-   the file is missing, if the active tenant **looks corporate** (any tenant display
-   name or verified domain that contains `deloitte`, including `deloitte.com`, or any
-   other work domain / employer directory), or if the pin does not match:
+   An optional `allowedCustomDomains` list names verified custom domains that are
+   yours (for example `skopekreep.com` if you add it to the tenant). An optional
+   `corporatePatterns` list adds extra substrings that mark a work tenant; `deloitte`
+   is always built in and cannot be allowlisted away.
+
+4. `scripts/lab/lab-up.ps1` and `scripts/lab/lab-down.ps1` **must** read that file and
+   **refuse to run** if the file is missing, if the pin does not match, or if the
+   active tenant **looks corporate**. Corporate detection is strict:
+
+   - The tenant display name, default domain, any verified domain, or the signed-in
+     user name contains `deloitte` (or a `corporatePatterns` entry), even if that
+     domain is listed in `allowedCustomDomains`.
+   - The tenant has a verified domain that is not `*.onmicrosoft.com` and is not in
+     `allowedCustomDomains`. Work directories always have custom domains; a personal
+     Default Directory does not, unless you add one and allowlist it.
+
+   Scope still applies:
 
    - For resource labs (A00–A04, A06–A17 except A17 Entra review): the active tenant
      and subscription must match `expectedTenantId` and `expectedSubscriptionId`.
@@ -553,15 +566,34 @@ parses, and the Pester test stays red until the script does the work.
 | Layer | Tools | Needs an Azure login? | In `verify-all` / CI? |
 |---|---|---|---|
 | Compile | `bicep build`, `bicep build-params` | No | Yes |
-| Lint | `bicep lint` with the repo `bicepconfig.json`; course rules set to `Error` as listed in AUTHORING-INFRA. `[WRITE]` / `[MODIFY]` starters must be lint-clean. `[BUG]` starters may fail only the rule ids in `ExpectDiagnostics` | No | Yes |
+| Lint | `bicep lint` with the repo `bicepconfig.json`. Enabled course rules are set to `warning` (not `Error`); the harness fails on any warning, like `-Werror`. `[WRITE]` / `[MODIFY]` starters must be lint-clean. `[BUG]` starters may fail only the rule ids in `ExpectDiagnostics` | No | Yes |
 | Snapshot | `bicep snapshot` on a `.bicepparam`, only if the pinned CLI treats it as stable | No | Optional (section 13.2) |
-| Resource / WAF rules | `PSRule.Rules.Azure` with `AZURE_BICEP_FILE_EXPANSION: true` in `ps-rule.yaml`. `[WRITE]` / `[MODIFY]` starters must be PSRule-clean. `[BUG]` starters may fail only the rule ids in `ExpectDiagnostics` | No | Yes (also the `microsoft/ps-rule` CI action) |
+| Resource / WAF rules | `PSRule.Rules.Azure` with `AZURE_BICEP_FILE_EXPANSION: true` in `ps-rule.yaml`, baseline `Azure.Pillar.Security.L1`. `[WRITE]` / `[MODIFY]` starters must be PSRule-clean. `[BUG]` starters may fail only the rule ids in `ExpectDiagnostics` | No | Yes, via `scripts/psrule.ps1` and verify-all (not the `microsoft/ps-rule` action) |
 | Structural tests | Pester 5, over compiled JSON and, for solutions, over expected outputs | No | Yes |
 | ARM JSON style | `arm-ttk`, **optional, A01 only**, for raw ARM JSON exercises | No | Optional; not the default language test (Bicep already contains the deploymentTemplate TTK cases; new investment is the Bicep linter; arm-ttk 0.27 remains available for JSON / createUiDefinition) |
 | Preflight | `az deployment group validate --validation-level Provider\|ProviderNoRbac\|Template` (CLI 2.76+) | Yes | No (a `[LAB]` step the student runs) |
 | What-if | `az deployment group what-if` (and sub / mg / tenant when the exercise is at that scope) | Yes, unless the exercise uses a checked-in fixture | Fixture: yes. Live: no |
 | Post-deploy | Pester + `az` / Az PowerShell assertions | Yes | No |
 | Portal / CLI skills | script + checked-in fixture; `ANSWER.md` headings where the README requires prose | No for the default path | Yes: the fixture script runs. Live portal/CLI steps are not replayed. `ANSWER.md`, when required, must exist, be non-empty, and contain every required heading (quality of prose is not graded) |
+
+Linter rules are `warning` in `bicepconfig.json` because Bicep 0.49.2 makes `bicep build`
+**fail** on an error-level linter diagnostic. A `[BUG]` starter whose defect is a
+linter rule must still compile so its Pester harness can run. The harness (`Get-LintFindings`)
+treats every warning and error as a finding, so a warning still fails the exercise,
+exactly as the C courses compile with `-Werror`. `lint.ps1` rejects any rule set to
+`error`.
+
+The PSRule baseline is `Azure.Pillar.Security.L1` (mapped to the `@course` group in
+`ps-rule.yaml`). Full `Azure.GA_*` baselines were not used: they fail rules such as
+`Azure.Storage.UseReplication` on `Standard_LRS` and `Azure.Resource.UseTags` on
+untagged resources, which contradicts section 10.4 (prefer Standard_LRS) and would
+bury beginners. PSRule runs through `scripts/psrule.ps1` and verify-all, not the
+`microsoft/ps-rule` GitHub Action, so `[BUG]` starters can fail named rules on
+purpose without a separate action treating that as a CI failure. **Pending for A07:**
+whether `Azure.Storage.LocalAuth` (in Security L1) needs a documented suppression.
+A07 teaches SAS tokens, stored access policies, and access keys, which use shared-key
+/ local authentication; that rule wants local auth disabled. Do not invent a
+suppression until that question is decided.
 
 `az bicep build` / `az bicep lint` do not take `--config`. Course scripts call the Bicep
 CLI directly (`bicep lint --config ./bicepconfig.json`) so the repo config is always the
@@ -719,6 +751,11 @@ and is a prerequisite for every later `[LAB]`.
 - **Portal / CLI-only:** creating and using SAS tokens; managing access keys. IP
   firewall rules can be Bicep, with a `[CLI]` confirmation.
 - **Targets:** 6 exercises, 2 drills.
+- **Notes:** PSRule Security L1 includes `Azure.Storage.LocalAuth`, which wants shared-key
+  / local authentication disabled. A07 teaches SAS, stored access policies, and access
+  keys, which use that mechanism. Whether those exercises need a documented
+  suppression is a pending question (section 4.5); do not invent one in the unit
+  until it is decided.
 
 ### A08: Azure Files and Blob Storage
 
@@ -1085,16 +1122,18 @@ LearnAzureByGrinding/
 │   ├── ROADMAP.md            student-facing learning path (Monk, Phase 2)
 │   └── review/<name>.md      each author's technical-doubt log
 ├── scripts/
+│   ├── toolchain.psd1        single source of toolchain pins
+│   ├── install-tools.ps1     install or check the pins (`-CheckOnly`; CI uses `-Ci`)
 │   ├── verify-all.ps1        every starter and solution (offline)
+│   ├── check.ps1             student-facing: is *my* work in this folder done?
 │   ├── lint.ps1              structure, pins, bicepconfig, portability
+│   ├── psrule.ps1            PSRule over solutions and lesson-demos (must be clean)
 │   ├── selftest.ps1          tests of the harness itself
 │   ├── rep.ps1               fresh copy of a drill or exercise into reps/
-│   ├── lab-up.ps1            .lab-env.json pin, budget gate, deploy helper / up.bicep
-│   ├── lab-down.ps1          delete course-tagged lab RGs; soft-delete purge warnings
-│   └── sweep.ps1             list leftover course-tagged resources (cost guard)
+│   └── lab/                  lab-up.ps1, lab-down.ps1, lab-sweep.ps1 (live Azure only)
 ├── lib/
 │   ├── AzGrinding.psd1 / .psm1    shared Pester helpers, assert conventions, id printing
-│   └── templates/            optional skeletons used only by authors, not students
+│   └── templates/            author-only skeletons (exercise.psd1, write/modify/cli-drill tests)
 ├── units/aNN-<slug>/         LESSON.md, eNN-<slug>/, drills/rNN-<slug>/, lesson-demo/
 ├── capstones/cN-<name>/     LESSON.md or README, eNN-<slug>/ (same format as units)
 └── solutions/                mirrors units/ (including drills/) and capstones/
@@ -1179,14 +1218,19 @@ Microsoft.Storage/storageAccounts with supportsHttpsTrafficOnly true"; "lab-down
 the resource group"; "ANSWER.md names the two change types").
 
 ## Verify
-The exact commands, with a path that matches the file's depth, plus `lab-up` /
-`lab-down` when tagged `[LAB]`, or a local `Invoke-Pester`:
+Students run `scripts/check.ps1` from the exercise or drill folder (or on a `reps/`
+copy) to ask whether *their* work is done. `verify-all` is the author and CI command:
+it expects an untouched starter to **fail**, so it is the wrong default for a student
+who has just started writing. Lab exercises also name `scripts/lab/lab-up.ps1` and
+`scripts/lab/lab-down.ps1`. Depths:
 
-- from `units/aNN-<slug>/eNN-<slug>/`: `pwsh -File ../../../scripts/verify-all.ps1 -Only <path>`
-- from `units/aNN-<slug>/drills/rNN-<slug>/`: `pwsh -File ../../../../scripts/verify-all.ps1 -Only <path>`
-- from `capstones/cN-<name>/eNN-<slug>/`: `pwsh -File ../../../scripts/verify-all.ps1 -Only <path>`
+- from `units/aNN-<slug>/eNN-<slug>/`: `pwsh -File ../../../scripts/check.ps1`
+- from `units/aNN-<slug>/drills/rNN-<slug>/`: `pwsh -File ../../../../scripts/check.ps1`
+- from `capstones/cN-<name>/eNN-<slug>/`: `pwsh -File ../../../scripts/check.ps1`
   (capstones use `eNN` folders under the capstone, the same layout as units; do not
   place the exercise files at the capstone root.)
+- Authors and CI still call `scripts/verify-all.ps1` (with `-Only <path>` when
+  narrowing) and, for live labs, `scripts/lab/lab-up.ps1` / `lab-down.ps1`.
 ```
 
 - State the **goal**, the **constraints**, and **how to verify**. Never a step list that
@@ -1211,7 +1255,7 @@ The exact commands, with a path that matches the file's depth, plus `lab-up` /
 ## Skill            what becomes automatic, and where it comes back later
 ## Rules            fresh copy via scripts/rep.ps1; what may be consulted; no live Azure
 ## Target           time per rep, number of reps (3+ on different days)
-## Verify           the structural tests, via verify-all or Invoke-Pester
+## Verify           the structural tests, via scripts/check.ps1 or Invoke-Pester
 ```
 
 The unit-level `units/aNN-<slug>/drills/README.md` is a different file, and Monk owns
@@ -1242,7 +1286,9 @@ Every exercise, drill, and solution directory has a small manifest:
 
 The solution's `exercise.psd1` is byte-identical to the starter's (it is harness). Relative
 paths to `lib/` and the repo-root `bicepconfig.json` are resolved from the course root,
-which scripts detect by walking up to `docs/SPEC.md`.
+which scripts detect by walking up to `lib/AzGrinding.psd1` (and `bicepconfig.json`
+for script entry points). That works in selftest temp trees and in `reps/` without
+copying this SPEC.
 
 ### 7.5 Starter sources
 
@@ -1283,9 +1329,12 @@ is the reference answer; the template may be unchanged.
 ### 7.7 Exit codes
 
 `0` pass; `1` a check failed (Pester, lint, PSRule, or verify-all); `2` usage or missing
-toolchain; `3` a `[LAB]` declined or blocked (cost-guard missing, no login) — not a silent
-skip; `124` reserved if a timeout wrapper is added. verify-all exits `0` only when
-nothing failed, nothing was skipped silently, and at least one item was checked.
+toolchain; `3` a `[LAB]` declined or blocked (cost-guard missing, no login, corporate-tenant refusal) — not a silent
+skip; `124` reserved if a timeout wrapper is added. On a tree that has exercises or
+solutions, verify-all exits `0` only when nothing failed and nothing was skipped
+silently. An **empty** tree (no units yet, as in Phase 1) exits 0 and says so.
+Pass `-RequireItems` to also require that at least one item was checked. CI turns
+`-RequireItems` on when the first unit lands.
 
 ### 7.8 Unit composition and voice
 
@@ -1335,22 +1384,26 @@ it must pass the way a solution does.
 ## 8. Harness design
 
 Phase 1 infra implements this section. The behaviour below is the acceptance bar for
-`scripts/verify-all.ps1`, `lint.ps1`, and `selftest.ps1`.
+`scripts/verify-all.ps1`, `lint.ps1`, `selftest.ps1`, and `scripts/psrule.ps1`.
 
 ### 8.1 Commands
 
 | Command | Does |
 |---|---|
-| `pwsh -File scripts/verify-all.ps1` | verify every starter and solution (offline layers only) |
+| `pwsh -File scripts/install-tools.ps1` | install or check pins from `scripts/toolchain.psd1` (`-CheckOnly`; CI uses `-Ci`) |
+| `pwsh -File scripts/verify-all.ps1` | verify every starter and solution (offline layers only). An empty tree passes; add `-RequireItems` when units exist |
 | `pwsh -File scripts/verify-all.ps1 -Only units/a06-storage-accounts` | prefix match; the mirrored solution comes along |
+| `pwsh -File scripts/check.ps1` | student-facing: is *my* work in this folder (or `-Path`) done? Use this, not verify-all, while writing |
 | `pwsh -File scripts/lint.ps1` | layout, manifests, `bicepconfig.json`, no `OUTPUT-PENDING`, no solutions links |
+| `pwsh -File scripts/psrule.ps1` | PSRule (`Azure.Pillar.Security.L1`) over solutions and lesson-demos |
 | `pwsh -File scripts/selftest.ps1` | throwaway fixtures that prove scaffold-fail, solution-pass, fidelity, and skip policy |
 | `pwsh -File scripts/rep.ps1 <path>` | fresh copy into gitignored `reps/` |
-| `pwsh -File scripts/lab-up.ps1 -Path <exercise>` | checks login and A02 cost-guard, then deploys if the exercise is a `[LAB]` |
-| `pwsh -File scripts/lab-down.ps1 [-Prefix] [-Tag]` | deletes course-tagged lab resources the scripts created |
-| `pwsh -File scripts/sweep.ps1` | *lists* leftover course-tagged resources; does not delete unless the user passes an explicit switch that the script documents |
+| `pwsh -File scripts/lab/lab-up.ps1 -Path <exercise>` | checks `.lab-env.json` and the A02 cost-guard, then deploys if the exercise is a `[LAB]` |
+| `pwsh -File scripts/lab/lab-down.ps1 -Path <exercise>` | deletes the matching course-tagged lab resource group; prints soft-delete warnings |
+| `pwsh -File scripts/lab/lab-sweep.ps1` | *lists* leftover course-tagged groups and resources; list-only |
 
-CI runs lint, selftest, and verify-all, then a dirty-tree check. It never runs `lab-up`.
+CI runs lint, selftest, verify-all (without `-RequireItems` until the first unit lands),
+`psrule.ps1`, and a dirty-tree check. It never runs the lab scripts.
 
 ### 8.2 Scaffold-OK rule (`WRITE`, `DRILL`, `MODIFY` starters)
 
@@ -1393,7 +1446,7 @@ An exercise is done when:
   checks still pass);
 - for `[BUG]`, `ANSWER.md` has the required headings, including the mechanism;
 - for `[LAB]`, post-deploy assertions ran, **and** `lab-down` has been run, **and**
-  `sweep.ps1` shows nothing unexpected for that prefix;
+  `scripts/lab/lab-sweep.ps1` shows nothing unexpected for that prefix;
 - no `out/` or compiled JSON has been left for commit.
 
 ### 8.5 Nothing is skipped silently
@@ -1423,15 +1476,22 @@ invoked the same way CI will invoke them.
 
 ## 9. Toolchain pins and portability
 
-- **Pin policy:** Phase 1 infra writes the exact versions into `docs/AUTHORING-INFRA.md`
-  and `.github/workflows/ci.yml` after verifying them on Nathan's Windows machine and on
-  both CI images. Bumps are a deliberate PR, not "whatever the runner has today."
-- **Minimums already known (20 November 2026 research):** PowerShell 7.4+; Azure CLI
-  2.76.0+ for `--validation-level` (`Provider`, `ProviderNoRbac`, `Template`); Azure CLI
-  2.88.0+ only if `az bicep run --config` is used; Pester 5.x; `microsoft/ps-rule` action
-  documented at `v2.9.0` with `modules: PSRule.Rules.Azure`; PSRule Bicep expansion via
-  `AZURE_BICEP_FILE_EXPANSION: true`. Azure PowerShell 13.4.0+ has the equivalent
-  ValidationLevel switch if a lab uses `Test-AzResourceGroupDeployment`.
+- **Pin policy:** `scripts/toolchain.psd1` is the **single source** of toolchain pins.
+  `docs/AUTHORING-INFRA.md` documents them; `lint.ps1` fails if the table, `ps-rule.yaml`,
+  or the workflow drift from that file. `scripts/install-tools.ps1` installs or checks
+  the pins. Phase 1 infra recorded the pins on `DESKTOP-AK42M6F` (21 November 2026)
+  and on both CI images. Bumps are a deliberate PR, not "whatever the runner has today."
+- **Pins recorded in Phase 1 (infra PR #3):** Bicep CLI `0.49.2` (standalone);
+  Pester `5.9.1`; PSRule engine `2.9.0`; `PSRule.Rules.Azure` `1.47.0`; PSRule
+  baseline `Azure.Pillar.Security.L1`; PowerShell 7.4.0 minimum; Azure CLI 2.76.0
+  minimum (labs only). `bicep snapshot` exists in 0.49.2 and stays **optional** in
+  verify-all (section 13.3). The `microsoft/ps-rule` action is **not** used.
+- **Minimums already known (20 November 2026 research, still valid as floors):**
+  Azure CLI 2.76.0+ for `--validation-level` (`Provider`, `ProviderNoRbac`,
+  `Template`); Azure CLI 2.88.0+ only if a script uses `az bicep run --config`.
+  Azure PowerShell 13.4.0+ has the equivalent ValidationLevel switch if a lab uses
+  `Test-AzResourceGroupDeployment`. PSRule Bicep expansion is
+  `AZURE_BICEP_FILE_EXPANSION: true`.
 - **PSRule vs the Bicep linter:** language hygiene (unused parameters, secret outputs, and
   the old ARM-template style rules) is the Bicep linter's job. Several
   `Azure.Template.*` PSRule rules are deprecated from v1.36.0 and will be removed in
@@ -1470,7 +1530,7 @@ Every lab resource (and every lab resource group) carries:
 | `owner` | `n8` (or the signed-in user) |
 
 Names use a short prefix (`lagb-` unless Phase 1 picks another) plus a unique suffix so
-two exercises do not collide. `lab-down` and `sweep.ps1` select by the `course` tag first,
+two exercises do not collide. `lab-down` and `lab-sweep.ps1` select by the `course` tag first,
 then by unit or prefix.
 
 ### 10.3 Budget gate
@@ -1509,11 +1569,11 @@ or `[EXPLAIN]` for ASR failover.
 
 ### 10.5 Teardown and sweep
 
-- `lab-down.ps1` deletes the resources (or the resource group) for a path, prefix, or tag
-  set. It is the last step of every `[LAB]` README.
-- `sweep.ps1` lists every remaining resource and resource group with `course=LearnAzureByGrinding`
-  in the lab subscription, with name, type, region, and the `expires` tag. Default is
-  list-only. A delete switch, if provided, requires an explicit confirmation string.
+- `scripts/lab/lab-down.ps1` deletes the matching course-tagged resource group (or the
+  resources for a path, unit, or tag set). It is the last step of every `[LAB]` README.
+- `scripts/lab/lab-sweep.ps1` *lists* every remaining course-tagged resource group and
+  resource in the lab subscription, with name, type, region, and the `expires` tag.
+  It is list-only.
 - Authors never commit a state file that contains a subscription ID or a secret. Parameter
   files in the repo use placeholders; students keep local `*.local.bicepparam` (gitignored)
   if needed.
@@ -1536,14 +1596,14 @@ same-day, guarded `[LAB]` with its own teardown.
 - Each optional costly lab ships an `up.bicep` (and a matching `.bicepparam` with
   placeholders) that deploys only that lab's resources into a **dedicated, course-tagged
   resource group** (tags in section 10.2, prefix `lagb-`).
-- `lab-up.ps1` checks `.lab-env.json` (section 3.2), checks the A02 budget gate, creates
-  or reuses that RG, and deploys `up.bicep`. It refuses to run on a tenant/subscription
-  mismatch or a corporate-looking tenant.
-- `lab-down.ps1` deletes that RG (or the tagged resources) and **prints soft-delete /
-  purge warnings** before it returns success: Recovery Services vaults, backup items,
-  Key Vaults, and similar resources can linger in a soft-deleted state and block a
-  clean delete. The script tells the student what to purge and how, and `sweep.ps1`
-  still lists leftovers.
+- `scripts/lab/lab-up.ps1` checks `.lab-env.json` (section 3.2), checks the A02 budget
+  gate, creates or reuses that RG, and deploys `up.bicep`. It refuses to run on a
+  tenant/subscription mismatch or a corporate-looking tenant.
+- `scripts/lab/lab-down.ps1` deletes that RG (or the tagged resources) and **prints
+  soft-delete / purge warnings** before it returns success: Recovery Services vaults,
+  backup items, Key Vaults, and similar resources can linger in a soft-deleted state
+  and block a clean delete. The script tells the student what to purge and how, and
+  `scripts/lab/lab-sweep.ps1` still lists leftovers.
 - Leaving Bastion Basic/Standard, a public IP, an App Service plan, a Recovery Services
   vault with a protected instance, or Site Recovery replication running is how a "two
   hour" lab becomes a monthly bill. Tear down the same day.
@@ -1596,10 +1656,10 @@ No macOS leg is required for v0.1 (section 13.3). Each required leg:
 1. Print toolchain versions (`pwsh`, `az`, `bicep`, Pester, PSRule).
 2. `pwsh -File scripts/lint.ps1`
 3. `pwsh -File scripts/selftest.ps1`
-4. `pwsh -File scripts/verify-all.ps1`
-5. PSRule via `microsoft/ps-rule` with `modules: PSRule.Rules.Azure` (or the same module
-   invoked from the verify script; Phase 1 infra may combine these if that is cleaner, but
-   a PR must still fail on a PSRule error the course has enabled).
+4. `pwsh -File scripts/verify-all.ps1` (add `-RequireItems` once the first unit lands)
+5. `pwsh -File scripts/psrule.ps1` (baseline `Azure.Pillar.Security.L1`). verify-all
+   also runs PSRule per exercise with tag-aware expectations. The `microsoft/ps-rule`
+   action is not used.
 6. Fail if `git status --porcelain --ignored` is not empty.
 
 A PR is mergeable only when both legs are green on its head commit. **Agents never merge a
@@ -1761,18 +1821,11 @@ resource-group prefix and the `.lab-env.json` pin, not a work tenant.
 
 ### 13.2 Phase 1 local-pinning items (exact versions on `DESKTOP-AK42M6F`)
 
-These are not product decisions; they are numbers to record after a check on
-Nathan's Windows machine during Phase 1 infra, then to write into
-`docs/AUTHORING-INFRA.md` and `.github/workflows/ci.yml`:
-
-- Azure CLI (minimum already 2.76.0; 2.88.0 if a script uses `az bicep run --config`)
-- Bicep CLI (standalone or the version `az bicep` installs at the pin)
-- Pester 5 minor version (not the in-box 3.4.0)
-- `PSRule.Rules.Azure` module version
-- `microsoft/ps-rule` GitHub Action tag (research on 20 November 2026 saw `v2.9.0`
-  documented; pin whatever is verified on the machine)
-- Whether the pinned Bicep CLI treats `bicep snapshot` as stable enough to require
-  in verify-all (the command is `bicep snapshot`, not `az bicep snapshot`)
+Recorded in Phase 1 infra (PR #3) in `scripts/toolchain.psd1` and documented in
+`docs/AUTHORING-INFRA.md`: Bicep CLI 0.49.2, Pester 5.9.1, PSRule 2.9.0,
+PSRule.Rules.Azure 1.47.0, baseline `Azure.Pillar.Security.L1`, PowerShell 7.4.0
+minimum, Azure CLI 2.76.0 minimum. The `microsoft/ps-rule` action is not used.
+`bicep snapshot` exists in 0.49.2 and stays optional in verify-all (section 13.3).
 
 ### 13.3 Defaults retained unless Phase 1 infra has a reason to revisit
 
@@ -1829,6 +1882,16 @@ The short list is in the 0.3 changelog.
   Developer Program fallback notes expiry; A17 Entra review uses the A05 test
   tenant or a Learn sandbox; public README no longer carries Nathan's Windows path,
   Gmail address, or Deloitte.
+
+  Aligned with infra PR #3 (`infra/phase1`, head `d98d5a8`): Bicep linter rules stay
+  at `warning` and the harness fails on warnings, so `[BUG]` starters still compile
+  under Bicep 0.49.2; verify-all passes on an empty tree and `-RequireItems` waits
+  for the first unit; PSRule baseline is `Azure.Pillar.Security.L1`, run through
+  `scripts/psrule.ps1` and verify-all (pending `Azure.Storage.LocalAuth` question for
+  A07); lab scripts live in `scripts/lab/` (`lab-sweep.ps1`); corporate-tenant
+  refusal also covers non-allowlisted custom domains and the signed-in user name;
+  the course root is `lib/AzGrinding.psd1`; students use `scripts/check.ps1`, and
+  pins live in `scripts/toolchain.psd1` (`scripts/install-tools.ps1`, `lib/templates/`).
 
 - 0.2 (20 November 2026): Nathan's decisions applied. Beginner tenant and subscription
   setup (personal MSA Default Directory, disposable A05 Entra test tenant, Free vs

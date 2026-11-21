@@ -38,7 +38,8 @@ Re-check these when you start a unit, and again before you sit the exam:
 ## Environment (when the harness exists)
 
 You will need PowerShell 7.4+, Azure CLI 2.76 or later, a pinned Bicep CLI, Pester 5, and
-PSRule for Azure. Exact pins will live in `docs/AUTHORING-INFRA.md`.
+PSRule for Azure. Exact pins live in `scripts/toolchain.psd1` and are documented in
+`docs/AUTHORING-INFRA.md`. Install or check them with `scripts/install-tools.ps1`.
 
 Live labs use a **personal** Microsoft account and its Azure subscription, never a work
 tenant. Keep resource labs in that personal tenant and subscription. Use a separate,
