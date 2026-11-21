@@ -34,7 +34,7 @@ param skuName string
 
 The `=` syntax provides a default. The caller may omit that parameter, and the default is used. Parameters without defaults are required.
 
-Types include `string`, `int`, `bool`, `object`, `array`, and `securestring` / `secureobject`. Use `securestring` for passwords and keys; Azure redacts them in logs.
+Types include `string`, `int`, `bool`, `object`, and `array`. For passwords and keys, use the `@secure()` decorator on a `string` or `object` parameter. Azure Resource Manager redacts secure parameters in logs.
 
 You can add decorators to constrain a parameter:
 
@@ -81,7 +81,7 @@ The parts:
 - `'Microsoft.Storage/storageAccounts@2023-01-01'` — the resource type and API version. This is a literal string. The type is `namespace/type` (sometimes `namespace/parentType/childType`). The API version is a date, and it determines which properties are available.
 - `= { ... }` — the resource body. This is the JSON shape of the resource, but written in Bicep syntax. The properties depend on the resource type and API version.
 
-The `name` property is required for every resource. The `location` property is required for most resource types (not for role assignments or Policy, which are control-plane resources).
+The `name` property is required for every resource. The `location` property is required for most resource types (not for extension resources like role assignments, Policy assignments, or locks).
 
 You reference a resource's properties with dot syntax:
 
@@ -107,7 +107,7 @@ module storage 'storage.bicep' = {
 The parts:
 - `module storage` — the symbolic name.
 - `'storage.bicep'` — the path to the module file, relative to the calling file.
-- `name: 'storageDeployment'` — the deployment name. Azure records this in the deployment history. It must be unique within the scope.
+- `name: 'storageDeployment'` — the deployment name (optional). Azure records this in the deployment history. Reusing a name overwrites that entry.
 - `params: { ... }` — the parameters passed to the module.
 
 You reference a module's outputs with dot syntax:
@@ -139,7 +139,7 @@ The course linter configuration catches hard-coded locations (`no-hardcoded-loca
 |---------|------------------|------------------|
 | Type | The shape of the value (string, int, bool, object, array) | Every parameter, variable, and output |
 | Constraint | The allowed values or range (minLength, maxLength, allowed, minValue, maxValue) | Parameters only |
-| Secure type | Whether Azure redacts the value in logs (securestring, secureobject) | Parameters that hold passwords or keys |
+| Secure decorator | Whether ARM redacts the value in logs (`@secure()` on string or object parameters and outputs) | Parameters and outputs that hold passwords or keys |
 
 ## Worked example: A storage account with typed parameters
 
@@ -219,8 +219,8 @@ The reasoning: The main file accepts `storageName` and passes it as `storageAcco
 | Resource symbolic name vs resource name | The symbolic name (e.g., `storageAccount`) is the identifier you use in the Bicep file. The resource name (the `name` property) is the name Azure uses. The symbolic name can be any valid identifier; the resource name must follow Azure naming rules. |
 | API version in Bicep vs API version in the portal | Bicep requires an API version in the resource type string (e.g., `@2023-01-01`). The portal does not show API versions in the UI. When you export a resource from the portal, the JSON includes the API version. Use a recent stable version (not a preview version) unless you need a preview feature. |
 | Module name vs module symbolic name | The module symbolic name (e.g., `storage`) is the identifier you use in the Bicep file. The `name` property (e.g., `'storageDeployment'`) is the deployment name Azure records. The symbolic name can be any valid identifier; the deployment name must be unique within the scope. |
-| Secure parameter vs secure property | A secure parameter (`securestring` or `secureobject`) is redacted in logs. A secure property (e.g., a storage account key) is returned by Azure as a runtime value. To retrieve a secure property, use `listKeys` or another `list*` function. Bicep does not redact resource properties; it only redacts secure parameters. |
-| Compile-time iteration vs deployment-time loops | Bicep supports `for` loops that expand at compile time. The compiled JSON contains one copy of the resource for each iteration. There is no deployment-time loop: you cannot loop over the results of a runtime function. If you need to create ten storage accounts, write a `for` loop over a range or an array literal, and Bicep expands it when you run `bicep build`. |
+| Secure parameter vs secure property | A secure parameter (marked with `@secure()`) is redacted in logs by ARM. A secure property (e.g., a storage account key) is returned by Azure as a runtime value. To retrieve a secure property, use `listKeys` or another `list*` function. ARM does not redact resource properties; it only redacts secure parameters and outputs. |
+| Bicep `for` vs no runtime iteration | Bicep `for` loops compile to ARM `copy` loops that are evaluated when the deployment starts. The array must be known at that point, so it cannot come from `reference()` or `list*()` calls. If you need to create ten storage accounts, write `[for i in range(0, 10): ...]` over a literal range, and the ARM deployment evaluates the loop. |
 
 ## Official docs
 
@@ -252,7 +252,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
    No. Bicep does not map parameter names. The module call must use the parameter names the module declares. If the module expects `resourceName`, the calling file must pass `resourceName: <value>`. If the calling file passes `name: <value>`, the module does not see it (unless the module also has a parameter called `name`).
 
 4. **A storage account resource has `kind: 'StorageV2'` and `sku.name: 'Standard_LRS'`. You compile the Bicep file, deploy it, and then change `sku.name` to `'Standard_GRS'` and deploy again. What happens to the storage account?**  
-   Azure updates the existing storage account to use the new SKU. The account is not deleted and recreated; the SKU is changed in place. This is an Incremental deployment (the default mode): Azure updates the resource to match the template. If the property cannot be changed in place (for example, the storage account name), Azure would fail the deployment.
+   Azure updates the existing storage account to use the new SKU. The account is not deleted and recreated; the SKU is changed in place. This is an Incremental deployment (the default mode): Azure updates the resource to match the template. If the property cannot be changed in place (for example, `kind` from `StorageV2` to `BlobStorage`, or SKU tier from Standard to Premium), Azure fails the deployment.
 
 5. **You write a Bicep file with a parameter of type `string`. The caller passes an integer. What happens?**  
    The deployment fails at validation time. Bicep is strongly typed. If the parameter is `string`, the caller must pass a string (or a default must supply one). Passing an integer is a type error, and Azure Resource Manager rejects the deployment.

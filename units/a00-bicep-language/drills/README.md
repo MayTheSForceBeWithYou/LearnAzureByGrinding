@@ -4,7 +4,7 @@ These drills make Bicep syntax automatic. You will write parameters, resources, 
 
 ## How to use drills
 
-Run `pwsh -File ../../../../scripts/rep.ps1` from a drill folder to copy the starter into a new timestamped `reps/` directory. Work in that copy. Run `pwsh -File ../../../../../scripts/check.ps1` from the rep folder to verify your work. Repeat the drill on different days until you meet the target time and accuracy.
+Run `pwsh -File ../../../../scripts/rep.ps1 .` from a drill folder to copy the starter into a new timestamped `reps/` directory. Work in that copy. From the repository root, run `pwsh -File scripts/check.ps1 -Path reps/<id>/<stamp>` to verify your work (`rep.ps1` prints this command). Repeat the drill on different days until you meet the target time and accuracy.
 
 Drills have no hints. The starter fails its tests until you write the required code. If you get stuck, review the lesson, then start a fresh rep.
 

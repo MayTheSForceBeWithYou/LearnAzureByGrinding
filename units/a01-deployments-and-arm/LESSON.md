@@ -53,9 +53,11 @@ To deploy a resource group from a subscription-scoped file:
 ```bicep
 targetScope = 'subscription'
 
+param location string = 'eastus'
+
 resource rg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: 'my-rg'
-  location: 'eastus'
+  location: location
 }
 ```
 
@@ -79,8 +81,8 @@ A deployment has a mode: **Incremental** or **Complete**. The mode determines wh
 
 | Mode | What happens to resources not in the template |
 |------|-----------------------------------------------|
-| Incremental | Azure leaves them alone. The deployment adds or updates resources; it does not delete anything. |
-| Complete | Azure deletes them. The deployment makes the resource group match the template exactly. |
+| Incremental | Azure leaves them alone. The deployment adds or updates resources; it does not delete anything. The entire resource definition is redeployed, so properties you omit may reset to defaults (for example, subnets left out of a VNet definition are removed). |
+| Complete | Azure deletes them, except: Complete never deletes the resource group itself, locks block deletions, only resource types that support complete-mode deletion are removed, and a resource whose `condition` is false is deleted. |
 
 Incremental is the default. Complete is opt-in, and it is dangerous: if you forget to include a resource in the template, Azure deletes it. Complete mode is used for environments where the template is the single source of truth, and anything not in the template is unwanted. It is not used for production environments where multiple teams manage different resources in the same resource group.
 
@@ -178,7 +180,9 @@ Decompile is useful when you export a deployment from the portal or a live resou
 
 Before you deploy, you can validate the template and preview the changes.
 
-**Validation** checks that the template is well-formed and that required parameters are provided. It does not check permissions or resource limits. Run it with:
+**Validation** and **what-if** both require Azure sign-in and an existing resource group. Neither is offline.
+
+**Validation** checks that the template is well-formed, required parameters are provided, and runs provider checks and Azure Policy deny rules. At the default `--validation-level Provider` (Azure CLI 2.76+), it also checks RBAC permissions. Run it with:
 
 ```bash
 az deployment group validate \
@@ -186,7 +190,7 @@ az deployment group validate \
   --template-file main.bicep
 ```
 
-If validation succeeds, the command returns the compiled template. If it fails, it returns an error message.
+If validation succeeds, the command returns a validation result (not the compiled template). If it fails, it returns an error message. Validation does not guarantee the deployment will succeed.
 
 **What-if** shows what Azure will do if you deploy the template. It compares the template to the current state of the resource group and predicts creates, updates, and deletes. Run it with:
 
@@ -198,17 +202,19 @@ az deployment group what-if \
 
 What-if output uses symbols:
 
-| Symbol | Meaning |
-|--------|---------|
-| `+` | Azure will create this resource |
-| `~` | Azure will update this resource |
-| `-` | Azure will delete this resource (Complete mode only) |
-| `*` | Azure will deploy this resource (the action is not determined) |
-| `=` | Azure will not change this resource (it already matches) |
+| Symbol | Change type | Meaning |
+|--------|-------------|---------|
+| `+` | Create | Azure will create this resource |
+| `-` | Delete | Azure will delete this resource (Complete mode only) |
+| `~` | Modify | Azure will update this resource |
+| `!` | Deploy | Azure will deploy this resource |
+| `=` | NoChange | Azure will not change this resource (it already matches) |
+| `*` | Ignore | Resource exists but is not in the template (Incremental mode) |
+| `x` | Unsupported / NoEffect | Provider does not support what-if, or property change has no effect |
 
-What-if also shows property-level changes. If a storage account SKU changes from `Standard_LRS` to `Standard_GRS`, what-if shows `~ sku.name: "Standard_LRS" => "Standard_GRS"`.
+What-if also shows property-level changes for Modify operations.
 
-What-if is not perfect. It is a prediction, not a guarantee. Some resource providers do not support what-if, and those resources show as `*` (action not determined). What-if also does not catch all deployment failures: it checks the template structure and the current state, but it does not validate that you have permission to perform the operation or that the subscription has quota.
+What-if is not perfect. It is a prediction, not a guarantee. What-if does not catch all deployment failures: it checks the template structure and the current state, but it does not validate that you have permission to perform the operation or that the subscription has quota.
 
 ### Exporting a deployment
 
@@ -324,7 +330,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
 }
 ```
 
-This does not work. A storage account is a resource-group-scoped resource. You cannot deploy it directly from a subscription-scoped file, even with `scope: rg`. The `scope` property is only valid on modules, not on resources. To deploy a resource at a different scope, you must use a module. The module file has the correct target scope, and the calling file sets the module's scope with `scope: rg`.
+This does not work. A storage account is a resource-group-scoped resource. You cannot deploy it directly from a subscription-scoped file, even with `scope: rg`. Non-extension resources you deploy must match the file's target scope. The `scope` property is valid on modules, on `existing` resources, and on extension resources (locks, role assignments, Policy assignments), but not on non-extension resources you are deploying. To deploy a resource at a different scope, use a module. The module file has the correct target scope, and the calling file sets the module's scope with `scope: rg`.
 
 ## Worked example: What a what-if output means
 
@@ -332,11 +338,11 @@ You have a resource group with one storage account: `myaccount`, SKU `Standard_L
 
 OUTPUT-PENDING (what-if fixture for e04)
 
-What-if uses symbols to indicate change types: `+` (Create), `~` (Modify), `-` (Delete, Complete mode only), `*` (Deploy, action not determined), `=` (No change), and others for ignored or no-effect changes. When what-if predicts a modification, it shows property-level changes: which properties will change, and the old and new values. When it predicts a create, it shows the action but not the entire resource body. What-if is a diff, not a listing.
+What-if uses symbols to indicate change types: `+` (Create), `-` (Delete), `~` (Modify), `!` (Deploy), `=` (NoChange), `*` (Ignore), and `x` (Unsupported / NoEffect). Create shows the full resource body that will be created. Delete shows the full resource body that will be deleted. Modify shows a property-level diff: which properties will change, and the old and new values. NoChange and Ignore show only the resource identifier.
 
-The reasoning for this example: The first account exists in the resource group, and the template changes the SKU. What-if will show `~` (modify) and the property change. The second account does not exist, so what-if will show `+` (create). In Incremental mode (the default), what-if does not show deletes for resources not in the template. In Complete mode, what-if would show `-` for any resource in the resource group that is not in the template.
+The reasoning for this example: The first account exists in the resource group, and the template changes the SKU. What-if will show `~` (Modify) and the property diff. The second account does not exist, so what-if will show `+` (Create) with the full resource body. In Incremental mode (the default), resources not in the template show as `*` (Ignore). In Complete mode, what-if would show `-` (Delete) with the full resource body for any resource in the resource group that is not in the template.
 
-**The plausible wrong reading.** You might expect what-if to show the entire resource body for every create. It does not. What-if shows the action and, for updates, the changed properties. To see the full resource definition, read the template.
+**The plausible wrong reading.** You might expect what-if to show only the action symbol for Create, without the full body. That is not true. Create prints the full `after` body, Delete prints the full `before` body, and only Modify shows a diff. To see what will be created or deleted, read the what-if output, not just the template.
 
 ## Worked example: What a compile/decompile round trip rewrites
 
@@ -348,17 +354,17 @@ What is always lost:
 
 What may change:
 - Resource symbolic names (decompile may shorten or rename them)
-- Module structure (ARM JSON has nested deployments, not modules; decompile inlines them into a single flat file)
 - Logical expressions (decompile may simplify or rewrite them)
 
 What is usually preserved (but not guaranteed):
-- Parameter and variable names (when the JSON metadata includes them)
+- Parameter and variable names (they are JSON keys in the ARM template, so decompile keeps them)
 - String interpolation syntax (decompile reconstructs `${}` from `concat` or `format` calls)
+- Module structure (ARM nested deployments become separate `.bicep` module files with `module` calls, not inlined)
 - The resource structure and properties
 
-Decompile is best-effort. If you need the exact original Bicep, keep it in version control. Use decompile to convert exported ARM JSON to editable Bicep, not to recover lost source.
+Decompile is best-effort. If you need the exact original Bicep, keep it in version control. Use decompile to convert exported ARM JSON to editable Bicep, not to recover lost source. The decompiled Bicep is usually equivalent and needs cleanup (for example, it may use `reference(...)` which trips `use-resource-symbol-reference`), and it may not pass the course linter.
 
-**The plausible wrong reading.** You might expect decompile to be lossless: compile and decompile in a round trip, and you get the original file back. Decompile is a conversion tool, not a backup mechanism. ARM JSON does not store all the information the original Bicep had. Comments are lost. Symbolic names may change. Module structure is flattened. The decompiled Bicep is valid and functionally equivalent, but it is not identical to the original.
+**The plausible wrong reading.** You might expect decompile to be lossless: compile and decompile in a round trip, and you get the original file back. Decompile is a conversion tool, not a backup mechanism. ARM JSON does not store all the information the original Bicep had. Comments are lost. Symbolic names may change. The decompiled Bicep is valid but may need cleanup, and it is not identical to the original.
 
 ## Distinctions worth keeping straight
 
@@ -413,8 +419,8 @@ These are reference, not the reading. The lesson is the reading; the links are w
 - A Bicep file declares its target scope with `targetScope`; the default is `resourceGroup`.
 - Incremental mode leaves resources not in the template alone; Complete mode deletes them.
 - What-if predicts creates, updates, and deletes by comparing the template to the current state; it is not a guarantee.
-- Compile is lossless; decompile is best-effort and may rewrite variable names, string interpolation, and logical expressions.
-- To deploy a resource at a different scope, use a module with the `scope` property; you cannot set `scope` on a resource.
+- Compile is lossless; decompile is best-effort and may rename symbolic names or rewrite logical expressions.
+- To deploy a non-extension resource at a different scope, use a module with the `scope` property; `scope` is valid on modules, `existing` resources, and extension resources.
 - ARM JSON uses `[parameters('name')]` and `[variables('name')]` syntax; Bicep generates these expressions when you compile.
 
 ## Exercises
