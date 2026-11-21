@@ -111,7 +111,7 @@ Every lab resource and resource group carries five tags (exception: the persiste
 | `expires` | UTC timestamp `yyyy-MM-ddTHH:mm:ssZ`, written by `New-LabTags`, default now plus 8 hours (`-ExpiresInHours` flag) | `2026-11-21T20:30:00Z` |
 | `owner` | Your username | `student` |
 
-`lab-up` puts these five tags on the resource group it creates. `lab-down` selects **resource groups** by the `course` tag, name prefix, and `unit` tag (plus `exercise` with `-Path`), then runs `az group delete`. That removes every resource in the group, regardless of the resource's own tags.
+`lab-up` puts these five tags on the resource group it creates. `lab-down` selects **resource groups** by the `course` tag, name prefix, and `unit` tag (plus `exercise` with `-Path`), skips persistent groups unless `-IncludePersistent` is passed, then runs `az group delete`. That removes every resource in the group, regardless of the resource's own tags.
 
 ### Azure Advisor
 
@@ -203,7 +203,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 
 - A budget alerts you when spending crosses thresholds; it does not stop resources.
 - Forecasted alerts catch runaway costs early by predicting end-of-month spending from current usage.
-- Every lab resource and resource group must have the five course tags (`course`, `unit`, `exercise`, `expires`, `owner`).
+- Every lab resource and resource group must have the five course tags (`course`, `unit`, `exercise`, `expires`, `owner`), except the persistent guardrails group has `lifecycle=persistent` and no `expires`.
 - Advisor recommends improvements to existing resources; it analyzes periodically, not in real time.
 - Stopped (not deallocated) VMs bill compute, disks, and IPs; Stopped (deallocated) VMs bill disks and IPs; deleting a VM leaves disks and IPs that keep billing (what survives depends on `deleteOption`); `lab-down` deletes the resource group and removes everything.
 - The first live lab deploys a budget and action group at subscription scope and exports the deployment with `az deployment sub export`.
