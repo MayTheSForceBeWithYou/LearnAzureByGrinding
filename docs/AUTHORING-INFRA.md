@@ -203,9 +203,10 @@ Everything except `[LAB]` is NO-LIVE. verify-all enforces it twice:
 - `capture*.txt` / `whatif*.txt` may start with `# source: <relative path> sha256=<hex>` lines. If the
   named file's SHA-256 changed, the row fails `STALE`. Get the hash with
   `(Get-FileHash main.bicep -Algorithm SHA256).Hash.ToLower()`.
-- `OUTPUT-PENDING` anywhere in an item, or in `units/`, `capstones/`, `solutions/`, `README.md`,
-  `PROGRESS.md`, `docs/ROADMAP.md`, fails verify-all / lint. A `[WHATIF]` capture is real output or
-  `OUTPUT-PENDING`; never invented.
+- `OUTPUT-PENDING` in a fixture or other scanned file (`units/`, `capstones/`, `solutions/`,
+  `README.md`, `PROGRESS.md`, `docs/ROADMAP.md`) still fails lint and verify-all. Do not leave
+  the token in `LESSON.md` or `drills/README.md`; a lesson defers a missing capture in prose.
+  A `[WHATIF]` capture is real output or `OUTPUT-PENDING`; never invented.
 
 ## 7. verify-all rules
 
