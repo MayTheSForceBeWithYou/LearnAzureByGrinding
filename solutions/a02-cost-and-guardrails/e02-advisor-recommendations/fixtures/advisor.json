@@ -1,0 +1,26 @@
+[
+  {
+    "id": "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Advisor/recommendations/rec-unattached-disk",
+    "name": "rec-unattached-disk",
+    "category": "Cost",
+    "impact": "High",
+    "impactedValue": "lagb-disk-leftover",
+    "shortDescription": { "problem": "Unattached disk", "solution": "Delete the disk or attach it to a VM" }
+  },
+  {
+    "id": "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Advisor/recommendations/rec-tls",
+    "name": "rec-tls",
+    "category": "Security",
+    "impact": "Medium",
+    "impactedValue": "stlagbdemo",
+    "shortDescription": { "problem": "Storage account allows TLS 1.0", "solution": "Set minimumTlsVersion to TLS1_2" }
+  },
+  {
+    "id": "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Advisor/recommendations/rec-sku",
+    "name": "rec-sku",
+    "category": "Cost",
+    "impact": "Low",
+    "impactedValue": "stlagbdemo",
+    "shortDescription": { "problem": "Right-size underused storage SKU", "solution": "Consider Standard_LRS if GRS is unused" }
+  }
+]

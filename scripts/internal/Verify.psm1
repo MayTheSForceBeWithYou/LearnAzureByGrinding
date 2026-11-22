@@ -131,8 +131,9 @@ function Test-StarterItem {
         }
         'BUG' {
             $want = @($m.ExpectDiagnostics | Sort-Object -Unique)
-            $have = if ($diag) { $diag.Names } else { @() }
-            if ($pr -and $pr.Crashes.Count) { $res.Problems.Add("starter harness crashed: $(@($pr.Crashes)[0])") }
+            # @() so an empty or single-element Names (PowerShell unwraps both) still has .Count under StrictMode.
+            $have = @($(if ($diag) { @($diag.Names) }) | Where-Object { $_ })
+            if ($pr -and @($pr.Crashes).Count) { $res.Problems.Add("starter harness crashed: $(@($pr.Crashes)[0])") }
             if ($want.Count) {
                 $missing = @($want | Where-Object { $_ -notin $have })
                 $extra = @($have | Where-Object { $_ -notin $want })
@@ -142,7 +143,7 @@ function Test-StarterItem {
             } else {
                 if ($have.Count) { $res.Problems.Add("BUG starter has diagnostics but no ExpectDiagnostics: $($have -join ', ')") }
                 if (-not $pr) { $res.Problems.Add('BUG starter without ExpectDiagnostics needs a failing Pester test') }
-                elseif (-not $pr.Crashes.Count -and $pr.Failed -eq 0) { $res.Problems.Add('BUG starter passes its Pester test; the defect must make a check fail') }
+                elseif (-not @($pr.Crashes).Count -and $pr.Failed -eq 0) { $res.Problems.Add('BUG starter passes its Pester test; the defect must make a check fail') }
                 if (-not $res.Problems.Count) { $res.Verdict = "bug OK: Pester fails on the defect ($(@($pr.FailedTests | ForEach-Object Name) -join '; '))" }
             }
         }
