@@ -336,7 +336,7 @@ This does not work. A storage account is a resource-group-scoped resource. You c
 
 You have a resource group with one storage account: `myaccount`, SKU `Standard_LRS`. You prepare a template that includes the same storage account but changes the SKU to `Standard_GRS`, and adds a second storage account, `myaccount2`. You run what-if.
 
-OUTPUT-PENDING (what-if fixture for e04)
+A raw `az deployment group what-if` transcript for this scenario is not in the lesson yet. It will be added from a live capture, and that same capture is the fixture for e04. Until then, use the symbol table and the reasoning below.
 
 What-if uses symbols to indicate change types: `+` (Create), `-` (Delete), `~` (Modify), `!` (Deploy), `=` (NoChange), `*` (Ignore), and `x` (Unsupported / NoEffect). Create shows the full resource body that will be created. Delete shows the full resource body that will be deleted. Modify shows a property-level diff: which properties will change, and the old and new values. NoChange and Ignore show only the resource identifier.
 

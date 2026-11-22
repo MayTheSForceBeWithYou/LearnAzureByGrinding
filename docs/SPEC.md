@@ -1226,8 +1226,10 @@ lesson is the reading; the links are where a student goes to confirm or go deepe
 ```
 
 Do not solve an exercise in the lesson. Never invent tool or portal output; quote only
-from `capture*.txt` or `lesson-demo/` produced from the shipped source. Until a capture
-exists, use an `OUTPUT-PENDING` marker, which blocks merging.
+from `capture*.txt` or `lesson-demo/` produced from the shipped source. If a capture is
+not yet taken, the lesson defers it in prose and must not use the `OUTPUT-PENDING` token.
+That token belongs in the exercise or drill fixture / capture file, where lint and
+verify-all fail and merge is blocked until real output replaces it.
 
 ### 7.2 Exercise README.md
 
@@ -1964,6 +1966,11 @@ The short list is in the 0.3 changelog.
   unless `-IncludePersistent`; lab-sweep lists it as expected (not exit 1); the
   budget gate runs before `up.ps1` on every resource lab outside A02 and checks only
   the budget's name and amount > 0; live export uses `az deployment sub export`.
+
+  Lesson vs fixture capture gate (22 November 2026): a lesson defers a missing
+  capture in prose and must not use the `OUTPUT-PENDING` token; the token belongs
+  in the exercise or drill fixture / capture file, where lint and verify-all fail
+  until real output replaces it. Never invent tool or portal output.
 
 - 0.2 (20 November 2026): Nathan's decisions applied. Beginner tenant and subscription
   setup (personal MSA Default Directory, disposable A05 Entra test tenant, Free vs
