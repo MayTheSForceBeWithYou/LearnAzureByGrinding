@@ -21,7 +21,12 @@ function Invoke-IsolatedPester {
         if (-not (Test-Path -LiteralPath $tmp)) {
             return [pscustomobject]@{ Result = 'Crashed'; Total = 0; Passed = 0; Failed = 0; FailedTests = @(); Crashes = @('Pester runner produced no result (is Pester 5 installed?)'); NoLive = $false }
         }
-        Get-Content -Raw -LiteralPath $tmp | ConvertFrom-Json -Depth 6
+        $pr = Get-Content -Raw -LiteralPath $tmp | ConvertFrom-Json -Depth 6
+        # ConvertFrom-Json unwraps [] to $null and a 1-element array to a scalar. StrictMode 3.0
+        # then throws PropertyNotFoundException on .Count. Re-wrap before returning.
+        $pr.FailedTests = @($pr.FailedTests | ForEach-Object { $_ })
+        $pr.Crashes = @($pr.Crashes | ForEach-Object { $_ })
+        $pr
     } finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
 }
 
@@ -49,11 +54,11 @@ function Get-Diagnostics {
     <# Lint findings (warnings + errors) and PSRule failures for a .bicep entry: names, as one sorted set. #>
     param([string]$EntryPath, [string]$Root, [switch]$NoPSRule)
     $lint = @(Get-LintFindings -Path $EntryPath)
-    $ps = if ($NoPSRule) { @() } else { @(Invoke-CoursePSRule -Path $EntryPath -Root $Root) }
+    $ps = @(if (-not $NoPSRule) { Invoke-CoursePSRule -Path $EntryPath -Root $Root })
     [pscustomobject]@{
         Lint   = $lint
         PSRule = $ps
-        Names  = @(@($lint | ForEach-Object RuleId) + $ps | Where-Object { $_ } | Sort-Object -Unique)
+        Names  = @(@($lint | ForEach-Object RuleId) + @($ps) | Where-Object { $_ } | Sort-Object -Unique)
         Text   = @(@($lint | ForEach-Object { "lint $($_.RuleId) (line $($_.Line))" }) + @($ps | ForEach-Object { "PSRule $_" }))
     }
 }
@@ -69,8 +74,8 @@ function Test-CommonOffline {
     if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { return $null }
     if ($M.Entry -match '\.ps1$') {
         $errs = @(Test-PowerShellParse -Path $entry)
-        if ($errs.Count) { $Res.Problems.Add("does not parse: $($errs -join '; ')") }
-        return [pscustomobject]@{ Ok = (-not $errs.Count); Template = $null; Errors = $errs }
+        if (@($errs).Count) { $Res.Problems.Add("does not parse: $($errs -join '; ')") }
+        return [pscustomobject]@{ Ok = (-not @($errs).Count); Template = $null; Errors = $errs }
     }
     $b = Invoke-BicepBuild -Path $entry
     if (-not $b.Ok) { $Res.Problems.Add("does not compile: $(@($b.Errors | Select-Object -First 3) -join ' | ')") }
@@ -84,7 +89,7 @@ function Test-CommonOffline {
 }
 
 function Format-Pester($pr) {
-    if ($pr.Crashes.Count) { return "harness crashed: $(@($pr.Crashes)[0])" }
+    if (@($pr.Crashes).Count) { return "harness crashed: $(@($pr.Crashes)[0])" }
     "$($pr.Failed) of $($pr.Total) Pester test(s) failed: $(@($pr.FailedTests | Select-Object -First 2 | ForEach-Object { "$($_.Name): $($_.Error)" }) -join ' | ')"
 }
 
@@ -103,7 +108,7 @@ function Test-StarterItem {
     $testPath = Join-Path $Dir $m.Test
     $pr = if (Test-Path -LiteralPath $testPath -PathType Leaf) { Invoke-IsolatedPester -TestPath $testPath } else { $null }
     if ($pr -and $pr.NoLive) { $res.Problems.Add('NO-LIVE: a test reached for live Azure (the runner trapped it); mock az / Az cmdlets') }
-    if ($pr -and $pr.Total -eq 0 -and -not $pr.Crashes.Count) { $res.Problems.Add("$($m.Test) contains no tests") }
+    if ($pr -and $pr.Total -eq 0 -and -not @($pr.Crashes).Count) { $res.Problems.Add("$($m.Test) contains no tests") }
     $t = $b.Template
     switch ($m.PrimaryTag) {
         { $_ -in 'WRITE', 'DRILL', 'MODIFY' } {
@@ -112,47 +117,49 @@ function Test-StarterItem {
                     $res.Problems.Add("stop line or suppression in $($f.Name) (no #disable-next-line / #disable-diagnostics in a starter)")
                 }
             }
-            if ($diag) { foreach ($x in $diag.Text) { $res.Problems.Add("starter must be lint/PSRule clean: $x") } }
+            if ($diag) { foreach ($x in @($diag.Text)) { $res.Problems.Add("starter must be lint/PSRule clean: $x") } }
             $pending = @()
             if ($t) {
                 if ($m.PrimaryTag -eq 'MODIFY') { $pending += Test-ExpectProperties -Template $t -Expect $m.ExpectProperties }
                 $pending += Test-ExpectResources -Template $t -Types $m.ExpectResources
                 $pending += Test-ExpectOutputs -Template $t -Names $m.ExpectOutputs
-                $declared = $m.ExpectResources.Count + $m.ExpectOutputs.Count + $(if ($m.PrimaryTag -eq 'MODIFY') { $m.ExpectProperties.Count } else { 0 })
-                if ($declared -and -not $pending.Count) { $res.Problems.Add('starter already satisfies its Expect* list; nothing is left for the student to write') }
+                $declared = @($m.ExpectResources).Count + @($m.ExpectOutputs).Count + $(if ($m.PrimaryTag -eq 'MODIFY') { @($m.ExpectProperties).Count } else { 0 })
+                if ($declared -and -not @($pending).Count) { $res.Problems.Add('starter already satisfies its Expect* list; nothing is left for the student to write') }
             }
             if (-not $pr) { break }
-            if ($pr.Crashes.Count) { $res.Problems.Add("starter harness crashed instead of failing an assertion: $(@($pr.Crashes)[0])") }
+            if (@($pr.Crashes).Count) { $res.Problems.Add("starter harness crashed instead of failing an assertion: $(@($pr.Crashes)[0])") }
             elseif ($pr.Failed -eq 0) { $res.Problems.Add("starter PASSES its tests; a $($m.PrimaryTag) starter must fail until the student does the work") }
             if (-not $res.Problems.Count) {
-                if (-not $pending.Count) { $pending = @($pr.FailedTests | ForEach-Object Name) }
+                if (-not @($pending).Count) { $pending = @($pr.FailedTests | ForEach-Object Name) }
                 $res.Verdict = "scaffold OK: structural tests fail pending: $($pending -join '; ')"
             }
         }
         'BUG' {
             $want = @($m.ExpectDiagnostics | Sort-Object -Unique)
-            $have = if ($diag) { $diag.Names } else { @() }
-            if ($pr -and $pr.Crashes.Count) { $res.Problems.Add("starter harness crashed: $(@($pr.Crashes)[0])") }
-            if ($want.Count) {
+            # `if` unwraps @() to $null and a 1-element Names to [string]; StrictMode 3.0 then
+            # throws on $have.Count. Re-wrap so 0- and 1-diagnostic Pester-only BUG starters work.
+            $have = @(if ($diag) { $diag.Names })
+            if ($pr -and @($pr.Crashes).Count) { $res.Problems.Add("starter harness crashed: $(@($pr.Crashes)[0])") }
+            if (@($want).Count) {
                 $missing = @($want | Where-Object { $_ -notin $have })
                 $extra = @($have | Where-Object { $_ -notin $want })
-                if ($missing.Count) { $res.Problems.Add("BUG starter does not fail ExpectDiagnostics: $($missing -join ', ')") }
-                if ($extra.Count) { $res.Problems.Add("BUG starter fails rules not in ExpectDiagnostics: $($extra -join ', ') (a bug exercise contains exactly the advertised defects)") }
+                if (@($missing).Count) { $res.Problems.Add("BUG starter does not fail ExpectDiagnostics: $($missing -join ', ')") }
+                if (@($extra).Count) { $res.Problems.Add("BUG starter fails rules not in ExpectDiagnostics: $($extra -join ', ') (a bug exercise contains exactly the advertised defects)") }
                 if (-not $res.Problems.Count) { $res.Verdict = "bug OK: starter fails exactly $($want -join ', ')" + $(if ($pr -and $pr.Failed) { ' and its Pester test' } else { '' }) }
             } else {
-                if ($have.Count) { $res.Problems.Add("BUG starter has diagnostics but no ExpectDiagnostics: $($have -join ', ')") }
+                if (@($have).Count) { $res.Problems.Add("BUG starter has diagnostics but no ExpectDiagnostics: $($have -join ', ')") }
                 if (-not $pr) { $res.Problems.Add('BUG starter without ExpectDiagnostics needs a failing Pester test') }
-                elseif (-not $pr.Crashes.Count -and $pr.Failed -eq 0) { $res.Problems.Add('BUG starter passes its Pester test; the defect must make a check fail') }
+                elseif (-not @($pr.Crashes).Count -and $pr.Failed -eq 0) { $res.Problems.Add('BUG starter passes its Pester test; the defect must make a check fail') }
                 if (-not $res.Problems.Count) { $res.Verdict = "bug OK: Pester fails on the defect ($(@($pr.FailedTests | ForEach-Object Name) -join '; '))" }
             }
         }
         default {
             # PREDICT, EXPLAIN, WHATIF, PORTAL, CLI: shipped checks pass; the prose is the work.
-            if ($diag) { foreach ($x in $diag.Text) { $res.Problems.Add("shipped file must be lint/PSRule clean: $x") } }
-            if ($pr -and ($pr.Crashes.Count -or $pr.Failed)) { $res.Problems.Add("shipped checks must pass for $($m.PrimaryTag): $(Format-Pester $pr)") }
+            if ($diag) { foreach ($x in @($diag.Text)) { $res.Problems.Add("shipped file must be lint/PSRule clean: $x") } }
+            if ($pr -and (@($pr.Crashes).Count -or $pr.Failed)) { $res.Problems.Add("shipped checks must pass for $($m.PrimaryTag): $(Format-Pester $pr)") }
             $ans = Join-Path $Dir 'ANSWER.md'
-            if ((Test-Path -LiteralPath $ans) -and $m.AnswerHeadings.Count) { foreach ($p in (Test-AnswerFile -Path $ans -Headings $m.AnswerHeadings)) { $res.Problems.Add($p) } }
-            if (-not $res.Problems.Count) { $res.Verdict = "offline checks pass; graded artefact is $(if ($m.AnswerHeadings.Count) { 'ANSWER.md' } else { 'the student''s work' })" }
+            if ((Test-Path -LiteralPath $ans) -and @($m.AnswerHeadings).Count) { foreach ($p in (Test-AnswerFile -Path $ans -Headings $m.AnswerHeadings)) { $res.Problems.Add($p) } }
+            if (-not $res.Problems.Count) { $res.Verdict = "offline checks pass; graded artefact is $(if (@($m.AnswerHeadings).Count) { 'ANSWER.md' } else { 'the student''s work' })" }
         }
     }
     if ('LAB' -in $m.Tags) { $res.Notes.Add('offline only; live steps not run') }
@@ -173,7 +180,7 @@ function Test-WorkedItem {
     if (-not $b -or -not $b.Ok) { return $res }
     if ($m.Entry -match '\.bicep$') {
         $d = Get-Diagnostics -EntryPath (Join-Path $Dir $m.Entry) -Root $Root -NoPSRule:$NoPSRule
-        foreach ($x in $d.Text) { $res.Problems.Add("must be lint/PSRule clean: $x") }
+        foreach ($x in @($d.Text)) { $res.Problems.Add("must be lint/PSRule clean: $x") }
     }
     if ($b.Template) {
         foreach ($x in (Test-ExpectResources -Template $b.Template -Types $m.ExpectResources)) { $res.Problems.Add("missing resource type $x") }
@@ -184,10 +191,10 @@ function Test-WorkedItem {
     if (Test-Path -LiteralPath $testPath -PathType Leaf) {
         $pr = Invoke-IsolatedPester -TestPath $testPath
         if ($pr.NoLive) { $res.Problems.Add('NO-LIVE: a test reached for live Azure (the runner trapped it); mock az / Az cmdlets') }
-        if ($pr.Crashes.Count -or $pr.Failed) { $res.Problems.Add((Format-Pester $pr)) }
+        if (@($pr.Crashes).Count -or $pr.Failed) { $res.Problems.Add((Format-Pester $pr)) }
         elseif ($pr.Total -eq 0) { $res.Problems.Add("$($m.Test) contains no tests") }
     }
-    if ($m.AnswerHeadings.Count -and ($RequireAnswer -or (Test-Path -LiteralPath (Join-Path $Dir 'ANSWER.md')))) {
+    if (@($m.AnswerHeadings).Count -and ($RequireAnswer -or (Test-Path -LiteralPath (Join-Path $Dir 'ANSWER.md')))) {
         foreach ($p in (Test-AnswerFile -Path (Join-Path $Dir 'ANSWER.md') -Headings $m.AnswerHeadings)) { $res.Problems.Add($p) }
     }
     if ('LAB' -in $m.Tags) { $res.Notes.Add('offline only; live steps not run') }
@@ -236,10 +243,10 @@ function Test-LessonDemo {
         if ($f.Extension -eq '.bicep') {
             $b = Invoke-BicepBuild -Path $f.FullName
             if (-not $b.Ok) { $res.Problems.Add("$r does not compile: $(@($b.Errors)[0])"); continue }
-            foreach ($x in (Get-Diagnostics -EntryPath $f.FullName -Root $Root -NoPSRule:$NoPSRule).Text) { $res.Problems.Add("${r}: $x") }
+            foreach ($x in @((Get-Diagnostics -EntryPath $f.FullName -Root $Root -NoPSRule:$NoPSRule).Text)) { $res.Problems.Add("${r}: $x") }
         } elseif ($f.Name -like '*.tests.ps1') {
             $pr = Invoke-IsolatedPester -TestPath $f.FullName
-            if ($pr.Crashes.Count -or $pr.Failed) { $res.Problems.Add("${r}: $(Format-Pester $pr)") }
+            if (@($pr.Crashes).Count -or $pr.Failed) { $res.Problems.Add("${r}: $(Format-Pester $pr)") }
         } elseif ($f.Extension -eq '.ps1') {
             foreach ($e in (Test-PowerShellParse -Path $f.FullName)) { $res.Problems.Add("$r does not parse: $e") }
         }

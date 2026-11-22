@@ -32,13 +32,15 @@ $failed = @($r.Failed | ForEach-Object { [pscustomobject]@{ Name = $_.ExpandedPa
 $crashes = @()
 $crashes += @($r.FailedBlocks | ForEach-Object { "block '$($_.ExpandedPath)': $(First-Line $_.ErrorRecord)" })
 $crashes += @($r.FailedContainers | ForEach-Object { "file: $(First-Line $_.ErrorRecord)" })
-$all = (@($failed.Error) + $crashes) -join "`n"
+$failed = @($failed)
+$crashes = @($crashes)
+$all = (@($failed | ForEach-Object Error) + $crashes) -join "`n"
 [pscustomobject]@{
     Result      = "$($r.Result)"
     Total       = $r.TotalCount
     Passed      = $r.PassedCount
     Failed      = $r.FailedCount
-    FailedTests = $failed
-    Crashes     = $crashes
+    FailedTests = @($failed)
+    Crashes     = @($crashes)
     NoLive      = [bool]($all -match 'NO-LIVE')
 } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $ResultFile -Encoding utf8
