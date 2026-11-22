@@ -119,6 +119,15 @@ Add-Case 'bug-fails-exactly-expectdiagnostics' {
     param($t)
     Put $t 'bug-https/starter' "$U/e02-https-bug"; Put $t 'bug-https/solution' "$S/e02-https-bug"
 } 0 @('bug OK: starter fails exactly Azure.Storage.SecureTransfer', 'a99-e02-https-bug: all checks passed')
+Add-Case 'bug-pester-only-zero-diagnostics' {
+    param($t)
+    Put $t 'bug-pester-only/starter' "$U/e07-pester-bug"; Put $t 'bug-pester-only/solution' "$S/e07-pester-bug"
+} 0 @('bug OK: Pester fails on the defect', 'output ready is true', 'a99-e07-pester-bug: all checks passed') @("The property 'Count' cannot be found", 'PropertyNotFoundException')
+Add-Case 'bug-pester-only-one-diagnostic-does-not-throw' {
+    param($t)
+    Put $t 'bug-pester-only/starter' "$U/e07-pester-bug"; Put $t 'bug-pester-only/solution' "$S/e07-pester-bug"
+    Add-Content -LiteralPath (Join-Path $t "$U/e07-pester-bug/main.bicep") -Value "`n@description('Unused; one lint diagnostic.')`nparam unused string = 'x'`n"
+} 1 @('BUG starter has diagnostics but no ExpectDiagnostics: no-unused-params') @("The property 'Count' cannot be found", 'PropertyNotFoundException')
 Add-Case 'bug-wrong-expectdiagnostics-fails' {
     param($t)
     Put $t 'bug-https/starter' "$U/e02-https-bug"; Put $t 'bug-https/solution' "$S/e02-https-bug"
