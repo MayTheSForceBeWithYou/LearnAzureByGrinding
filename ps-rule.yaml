@@ -1,0 +1,51 @@
+# PSRule for Azure configuration for LearnAzureByGrinding.
+#
+# Pins: the module versions below must match scripts/toolchain.psd1.
+# Baseline: scripts call Invoke-PSRule / Assert-PSRule with -Baseline '@course',
+# which this file maps to a named baseline shipped inside the pinned module, so the
+# rule set only changes when the module pin changes.
+#
+# Which files are analysed:
+#   - scripts/psrule.ps1 (CI step) passes explicit paths: every .bicep under
+#     solutions/ and units/*/lesson-demo/ (these must be clean).
+#   - scripts/verify-all.ps1 runs PSRule per exercise with tag-aware expectations
+#     (a [BUG] starter may fail exactly its ExpectDiagnostics).
+#   - A bare `Invoke-PSRule -InputPath .` at the repo root uses input.pathIgnore below,
+#     which limits discovery to course Bicep and keeps scripts/selftest fixtures out.
+#     It will report [BUG] starters, which fail on purpose.
+requires:
+  PSRule: '@pre >=2.9.0 <3.0.0'
+  PSRule.Rules.Azure: '1.47.0'
+
+include:
+  module:
+    - PSRule.Rules.Azure
+
+baseline:
+  group:
+    course: Azure.Pillar.Security.L1
+
+configuration:
+  AZURE_BICEP_FILE_EXPANSION: true
+  # Bicep cold start on a CI runner can exceed the 5 s default.
+  AZURE_BICEP_FILE_EXPANSION_TIMEOUT: 60
+  AZURE_BICEP_CHECK_TOOL: true
+  AZURE_BICEP_MINIMUM_VERSION: '0.49.2'
+
+input:
+  pathIgnore:
+    - '**'
+    - '!units/**/*.bicep'
+    - '!capstones/**/*.bicep'
+    - '!solutions/**/*.bicep'
+    - 'scripts/**'
+    - 'reps/**'
+    - 'out/**'
+
+execution:
+  unprocessedObject: Ignore
+  ruleSuppressed: Warn
+
+output:
+  culture:
+    - en-US

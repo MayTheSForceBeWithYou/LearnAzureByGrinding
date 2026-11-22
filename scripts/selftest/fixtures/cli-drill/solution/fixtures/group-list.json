@@ -1,0 +1,4 @@
+[
+  { "name": "lagb-a99-r01-one", "location": "eastus", "tags": { "course": "LearnAzureByGrinding" } },
+  { "name": "lagb-a99-r01-two", "location": "eastus", "tags": { "course": "LearnAzureByGrinding" } }
+]
