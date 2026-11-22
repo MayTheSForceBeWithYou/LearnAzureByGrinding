@@ -10,7 +10,7 @@ Predict what-if change types for this template against the current state describ
 - The template changes that account's SKU to `Standard_GRS` and adds a second account.
 - Incremental mode (the default).
 - `ANSWER.md` uses the required headings. Quote symbols from the lesson table (`+` Create, `~` Modify, `*` Ignore). Do not invent a full what-if payload.
-- `capture.txt` holds the pending live what-if marker until a real `az deployment group what-if` capture is dropped in. Do not invent az stdout. That pending marker fails lint and verify-all on purpose.
+- No what-if capture file is checked in. Do not invent `az` stdout. This item stays incomplete until a real `az deployment group what-if` capture is added.
 
 Required `ANSWER.md` headings (exact lines):
 

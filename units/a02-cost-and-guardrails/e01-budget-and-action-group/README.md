@@ -31,6 +31,6 @@ This lab *creates* the budget that later `[LAB]`s require. A02 is exempt from th
 <details>
 <summary>Hint</summary>
 
-Copy the neighbouring shape from the lesson, then add the three missing Actual/Forecasted notifications so you have five total.
+Write the budget and the action-group module below the marker. Five notifications: Actual 50/80/100 and Forecasted 80/100. The starter below the marker is empty on purpose.
 
 </details>
