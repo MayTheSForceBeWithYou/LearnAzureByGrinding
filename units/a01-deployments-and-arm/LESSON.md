@@ -334,13 +334,51 @@ This does not work. A storage account is a resource-group-scoped resource. You c
 
 ## Worked example: What a what-if output means
 
-You have a resource group with one storage account: `myaccount`, SKU `Standard_LRS`. You prepare a template that includes the same storage account but changes the SKU to `Standard_GRS`, and adds a second storage account, `myaccount2`. You run what-if.
+You have a resource group named `arm-template-group` that does not already contain storage account `n8deploy20261122`. You run what-if on a parameterized storage template with `storageSKU=Standard_GRS` and `storageName=n8deploy20261122`. Incremental mode is the default.
 
-A raw `az deployment group what-if` transcript for this scenario is not in the lesson yet. It will be added from a live capture, and that same capture is the fixture for e04. Until then, use the symbol table and the reasoning below.
+Here is a real `az deployment group what-if` transcript from 25 November 2026 (subscription ID redacted because this repository is public). The same capture is the fixture for e04, at `units/a01-deployments-and-arm/e04-what-if-changes/capture.txt`. The capture was taken from ARM JSON `arm-parameterized-storage-template.json`, not from the neighbour Bicep in that exercise folder.
+
+```text
+$templateFile = "arm-parameterized-storage-template.json"
+$DeploymentName = "addSkuParameter-$today"
+az deployment group what-if --name $DeploymentName --template-file $templateFile --parameters storageSKU=Standard_GRS storageName=n8deploy20261122
+Note: The result may contain false positive predictions (noise).
+You can help us improve the accuracy of the result by opening an issue here: https://aka.ms/WhatIfIssues
+NOTICE! - Want to get What-if without noise? Move to Deployment Stacks What-If https://aka.ms/stackswhatifGA
+
+Resource and property changes are indicated with this symbol:
+  + Create
+
+The deployment will update the following scope:
+
+Scope: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/arm-template-group
+
+  + Microsoft.Storage/storageAccounts/n8deploy20261122 [2025-01-01]
+
+      apiVersion:                          "2025-01-01"
+      id:                                  "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/arm-template-group/providers/Microsoft.Storage/storageAccounts/n8deploy20261122"
+      kind:                                "StorageV2"
+      location:                            "westus"
+      name:                                "n8deploy20261122"
+      properties.supportsHttpsTrafficOnly: true
+      sku.name:                            "Standard_GRS"
+      tags.displayName:                    "n8deploy20261122"
+      type:                                "Microsoft.Storage/storageAccounts"
+
+Resource changes: 1 to create.
+```
 
 What-if uses symbols to indicate change types: `+` (Create), `-` (Delete), `~` (Modify), `!` (Deploy), `=` (NoChange), `*` (Ignore), and `x` (Unsupported / NoEffect). Create shows the full resource body that will be created. Delete shows the full resource body that will be deleted. Modify shows a property-level diff: which properties will change, and the old and new values. NoChange and Ignore show only the resource identifier.
 
-The reasoning for this example: The first account exists in the resource group, and the template changes the SKU. What-if will show `~` (Modify) and the property diff. The second account does not exist, so what-if will show `+` (Create) with the full resource body. In Incremental mode (the default), resources not in the template show as `*` (Ignore). In Complete mode, what-if would show `-` (Delete) with the full resource body for any resource in the resource group that is not in the template.
+The reasoning for this capture:
+
+1. The legend lists only `+` Create. That is every change type this run predicted.
+2. The account `n8deploy20261122` is not already in the resource group, so Azure will create it. Create prints the full `after` body: API version, resource id, kind `StorageV2`, location `westus`, name, `supportsHttpsTrafficOnly`, SKU `Standard_GRS`, and the `displayName` tag.
+3. The summary line matches the legend: `Resource changes: 1 to create.`
+
+This capture does not include a Modify (`~`) line. Modify appears when a resource already exists and the template changes a property — for example an existing account whose SKU would move from `Standard_LRS` to `Standard_GRS`. No captured Modify transcript is shown yet.
+
+Ignore (`*`) is an Incremental-mode mark for a resource that already exists in the group but is not in the template. This capture's legend lists only Create, so that case is not shown here.
 
 **The plausible wrong reading.** You might expect what-if to show only the action symbol for Create, without the full body. That is not true. Create prints the full `after` body, Delete prints the full `before` body, and only Modify shows a diff. To see what will be created or deleted, read the what-if output, not just the template.
 

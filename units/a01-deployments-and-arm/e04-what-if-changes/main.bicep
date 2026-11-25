@@ -1,34 +1,23 @@
 @description('Azure region for the resource.')
 param location string = resourceGroup().location
 
-param existingName string = 'st${uniqueString(resourceGroup().id)}'
+@description('Storage account name.')
+param storageName string = 'n8deploy20261122'
 
-resource existing 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: existingName
+@description('Storage account SKU name.')
+param storageSKU string = 'Standard_GRS'
+
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: storageName
   location: location
   sku: {
-    name: 'Standard_GRS'
+    name: storageSKU
   }
   kind: 'StorageV2'
-    properties: {
-      supportsHttpsTrafficOnly: true
-      minimumTlsVersion: 'TLS1_2'
-      allowBlobPublicAccess: false
-      allowSharedKeyAccess: false
-    }
-}
-
-resource extra 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: 'st2${uniqueString(resourceGroup().id)}'
-  location: location
-  sku: {
-    name: 'Standard_LRS'
+  properties: {
+    supportsHttpsTrafficOnly: true
+    minimumTlsVersion: 'TLS1_2'
+    allowBlobPublicAccess: false
+    allowSharedKeyAccess: false
   }
-  kind: 'StorageV2'
-    properties: {
-      supportsHttpsTrafficOnly: true
-      minimumTlsVersion: 'TLS1_2'
-      allowBlobPublicAccess: false
-      allowSharedKeyAccess: false
-    }
 }
