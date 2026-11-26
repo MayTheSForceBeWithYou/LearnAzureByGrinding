@@ -40,13 +40,13 @@ A policy definition's `effect` controls what happens when a resource violates th
 - **Manual**: marks resources for manual compliance review.
 - **Disabled**: the Policy is assigned but not evaluated.
 
-**Evaluation order**: Disabled, Append/Modify, Deny, Audit, Manual, AuditIfNotExists/DeployIfNotExists, then DenyAction last.
+**Evaluation order**: Disabled, Append/Modify, Deny, Audit, Manual, AuditIfNotExists, DenyAction. DeployIfNotExists and AuditIfNotExists also run after the resource provider succeeds.
 
 Deny and Audit are the most common. Deny blocks non-compliant resources at deployment. Audit allows them through but flags them. Modify and DeployIfNotExists assignments require a managed identity (`identity` and `location` on the assignment); the identity also needs role assignments covering the definition's `roleDefinitionIds`, or remediation fails. Existing non-compliant resources need a remediation task.
 
 ### Custom Policy definitions
 
-A custom Policy definition is a JSON document with `policyRule`, `parameters`, and `metadata`. Deploy it at subscription scope:
+A custom Policy definition is a JSON document with `policyRule`, `parameters`, and `metadata`. Deploy it at subscription scope. This example is written for teaching; Azure provides a built-in "Require a tag on resources" policy for production use:
 
 ```bicep
 targetScope = 'subscription'
@@ -61,11 +61,7 @@ resource customPolicy 'Microsoft.Authorization/policyDefinitions@2023-04-01' = {
       if: {
         allOf: [
           { field: 'tags[owner]', exists: false }
-          { field: 'type', notIn: [
-            'Microsoft.Insights/actionGroups'
-            'Microsoft.Consumption/budgets'
-            'Microsoft.OperationalInsights/workspaces'
-          ] }
+          { field: 'type', notEquals: 'Microsoft.Insights/actionGroups' }
         ]
       }
       then: { effect: 'Deny' }
@@ -74,7 +70,7 @@ resource customPolicy 'Microsoft.Authorization/policyDefinitions@2023-04-01' = {
 }
 ```
 
-This definition uses `mode: 'Indexed'` and excludes global resources (action groups, budgets, workspaces) that do not have `tags` or `location` fields. It denies Indexed resources that do not have an `owner` tag. After deploying the definition, you assign it at the desired scope. Custom definitions are useful for organizational standards not covered by built-in policies.
+This definition uses `mode: 'Indexed'` and excludes action groups because the A02 action group has no `owner` tag. It denies Indexed resources that do not have an `owner` tag. After deploying the definition, you assign it at the desired scope.
 
 ### Role-based access control (RBAC)
 

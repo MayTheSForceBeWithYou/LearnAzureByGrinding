@@ -83,10 +83,10 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
 
 resource lock 'Microsoft.Authorization/locks@2020-05-01' = {
   scope: storage
-  name: 'readonly-lock'
+  name: 'delete-lock'
   properties: {
-    level: 'ReadOnly'
-    notes: 'Prevent configuration changes to production storage'
+    level: 'CanNotDelete'
+    notes: 'Prevent accidental deletion of production storage'
   }
 }
 ```
