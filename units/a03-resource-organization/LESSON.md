@@ -17,7 +17,7 @@ After this unit you can:
 
 ### Resource groups
 
-A **resource group** is a container for Azure resources. Every resource belongs to exactly one resource group, and the resource group defines the resource's region-level metadata (location, tags, locks, RBAC, Policy). Deleting a resource group deletes every resource in it. Resource groups are free; you pay only for the resources inside.
+A **resource group** is a container for Azure resources. Every resource belongs to exactly one resource group. The resource group is a lifecycle and management scope: its locks, RBAC assignments, and Policy assignments are inherited by the resources it contains. Deleting a resource group deletes every resource in it. Resource groups are free; you pay only for the resources inside.
 
 Resource groups are deployed at **subscription scope**. A subscription-scoped Bicep file declares resource groups with `Microsoft.Resources/resourceGroups@2024-03-01`:
 
@@ -71,38 +71,27 @@ A **lock** prevents accidental deletion or modification. Azure supports two lock
 
 Locks apply to the **control plane** (operations at `https://management.azure.com`), not the data plane. A CanNotDelete lock on a storage account prevents you from deleting the account, but it does not prevent you from uploading or deleting blobs. A ReadOnly lock on a storage account prevents you from changing the account's configuration (SKU, firewall rules) and blocks the `listKeys` POST operation (because it returns secrets), but it does not prevent data-plane operations like blob uploads.
 
-Locks are `Microsoft.Authorization/locks@2020-05-01`, scoped to a resource group or a specific resource. To lock a resource group from a subscription-scoped file, use a module deployed with `scope: rg`, or deploy the lock in a resource-group-scoped file. The `scope` property on a lock is valid only when the file's target scope already matches the lock's scope (for example, `scope: <storage-account>` in a resource-group-scoped file):
-
-```bicep
-targetScope = 'subscription'
-
-resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
-  name: 'prod-rg'
-  location: 'eastus'
-}
-
-module lock 'lock.bicep' = {
-  scope: rg
-  name: 'delete-lock-deployment'
-  params: {
-    lockName: 'delete-lock'
-    level: 'CanNotDelete'
-  }
-}
-```
-
-The module file `lock.bicep`:
+Locks are `Microsoft.Authorization/locks@2020-05-01`, scoped to a resource group or a specific resource. An extension resource (such as a lock or role assignment) can be deployed at a scope different from the deployment's target scope by setting the `scope` property to reference another resource within the same deployment. To lock a resource in a resource-group-scoped file, set `scope` to that resource:
 
 ```bicep
 targetScope = 'resourceGroup'
 
-param lockName string
-param level string
+param storageAccountName string
+param location string = resourceGroup().location
+
+resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: storageAccountName
+  location: location
+  sku: { name: 'Standard_LRS' }
+  kind: 'StorageV2'
+}
 
 resource lock 'Microsoft.Authorization/locks@2020-05-01' = {
-  name: lockName
+  scope: storage
+  name: 'readonly-lock'
   properties: {
-    level: level
+    level: 'ReadOnly'
+    notes: 'Prevent configuration changes to production storage'
   }
 }
 ```
@@ -138,13 +127,13 @@ resource mg 'Microsoft.Management/managementGroups@2021-04-01' = {
 
 The `name` is the management group's ID; the `displayName` is what the portal shows. When management-group creation is not available, A03 teaches management groups as `[EXPLAIN]` plus read-only CLI commands (`az account management-group list`, `az account management-group show`). The lesson does not require a live management-group deployment.
 
-Management-group scope is wider than subscription scope: a Policy or role assignment at management-group scope applies to every subscription in that management group and their resource groups and resources. This is the same inheritance model as locks and tags (with Policy for tags).
+Management-group scope is wider than subscription scope: a Policy or role assignment at management-group scope applies to every subscription in that management group and their resource groups and resources. Policy and RBAC assignments inherit downward from management groups, just as they do from subscriptions.
 
-## Worked example: A resource group with tags and a CanNotDelete lock
+## Worked example: A resource group with tags and inherited locks
 
-You need a production resource group in East US, tagged for the platform team and cost center 1234, locked against accidental deletion. You will deploy it at subscription scope and verify the lock prevents deletion.
+You need a production resource group in East US, tagged for the platform team and cost center 1234. You will deploy it at subscription scope and understand how locks and tags interact with resources inside.
 
-Here is the Bicep file (`main.bicep`):
+Here is the Bicep file:
 
 ```bicep
 targetScope = 'subscription'
@@ -162,35 +151,7 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   }
 }
 
-module lock 'lock.bicep' = {
-  scope: rg
-  name: 'prevent-delete-deployment'
-  params: {
-    lockName: 'prevent-delete'
-    level: 'CanNotDelete'
-    notes: 'Production resource group must not be deleted accidentally'
-  }
-}
-
 output resourceGroupId string = rg.id
-```
-
-The module file `lock.bicep`:
-
-```bicep
-targetScope = 'resourceGroup'
-
-param lockName string
-param level string
-param notes string = ''
-
-resource lock 'Microsoft.Authorization/locks@2020-05-01' = {
-  name: lockName
-  properties: {
-    level: level
-    notes: notes
-  }
-}
 ```
 
 You deploy this with:
@@ -202,9 +163,9 @@ az deployment sub create \
   --parameters location=eastus
 ```
 
-After deployment, the resource group exists with the tags. If you try to delete the resource group with `az group delete`, Azure refuses because of the lock. To delete the resource group, you must first delete the lock with `az lock delete`. Redeploying the template without the lock resource leaves the lock in place (Incremental mode does not delete resources not in the template); use `az lock delete` or a deployment stack with delete-on-unmanage.
+After deployment, the resource group exists with the tags. If you later add a lock to the resource group (via portal, CLI, or a subsequent deployment), that lock applies to every resource inside the group. For example, a CanNotDelete lock on the resource group prevents deletion of the group and of any storage account, VM, or other resource in the group. The lock inherits downward.
 
-**The plausible wrong reading.** You might expect the tags on the resource group to automatically apply to resources you deploy into it, so a storage account in this resource group would inherit the `environment=production` tag. That is not true. Tags do not inherit by default. If you deploy a storage account into this resource group without setting its `tags` property, the account has no tags. To enforce tag inheritance, use the built-in Azure Policy "Inherit a tag from the resource group" (Modify effect).
+**The plausible wrong reading.** You might expect the tags on the resource group to automatically apply to resources you deploy into it, so a storage account in this resource group would inherit the `environment=production` tag. That is not true. Tags do not inherit by default. If you deploy a storage account into this resource group without setting its `tags` property, the account has no tags. To enforce tag inheritance, use the built-in Azure Policy "Inherit a tag from the resource group" (Modify effect). Unlike tags, locks DO inherit downward automatically.
 
 ## Worked example: What a ReadOnly lock blocks
 
@@ -246,28 +207,20 @@ These are reference, not the reading. The lesson is the reading; the links are w
 ## Check yourself
 
 1. **A resource group in West US contains a storage account. You set the storage account's location to East US. What happens?**
-<details><summary>Answer</summary>
-The deployment succeeds. The resource group's location is metadata only and does not constrain the resources inside. The storage account is created in East US, and the resource group metadata stays in West US.
-</details>
-
 2. **A resource group has the tag `environment=production`. You deploy a storage account into that resource group without setting the account's `tags` property. What tags does the storage account have?**
-<details><summary>Answer</summary>
-None. Tags do not inherit automatically. If you want the storage account to have the `environment=production` tag, you must set it in the account's `tags` property, or use Azure Policy to apply tag inheritance.
-</details>
-
 3. **A resource group has a CanNotDelete lock. You try to change a storage account's SKU inside that group. What happens?**
-<details><summary>Answer</summary>
-The SKU change succeeds. CanNotDelete allows reads and updates; it only prevents deletion. If the resource group had a ReadOnly lock, the SKU change would be blocked.
-</details>
-
 4. **A storage account has a ReadOnly lock. You upload a blob to a container in that account. What happens?**
-<details><summary>Answer</summary>
-The upload succeeds. ReadOnly locks apply to the control plane (Azure Resource Manager operations on the storage account resource), not the data plane (blob operations).
-</details>
-
 5. **You move a storage account from one resource group to another in the same subscription. Does the storage account's location change?**
-<details><summary>Answer</summary>
-No. Moving a resource between resource groups (or subscriptions) changes which container the resource belongs to, but it does not change the resource's location. The storage account stays in the same Azure region.
+
+<details>
+<summary>Answers</summary>
+
+1. The deployment succeeds. The resource group's location is metadata only and does not constrain the resources inside. The storage account is created in East US, and the resource group metadata stays in West US.
+2. None. Tags do not inherit automatically. If you want the storage account to have the `environment=production` tag, you must set it in the account's `tags` property, or use Azure Policy to apply tag inheritance.
+3. The SKU change succeeds. CanNotDelete allows reads and updates; it only prevents deletion. If the resource group had a ReadOnly lock, the SKU change would be blocked.
+4. The upload succeeds if you use Microsoft Entra data-plane authentication or already have the account keys. ReadOnly locks apply to the control plane (Azure Resource Manager operations on the storage account resource), not the data plane (blob operations).
+5. No. Moving a resource between resource groups (or subscriptions) changes which container the resource belongs to, but it does not change the resource's location. The storage account stays in the same Azure region.
+
 </details>
 
 ## Takeaways
