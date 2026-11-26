@@ -21,6 +21,20 @@ Describe 'a04-e02-custom-sku-region-guard' {
         "$($def[0].Name)" | Should -Be 'lagb-sku-region-guard'
     }
 
+    It 'uses mode Indexed and excludes global so the A02 action group and budget are not denied' {
+        $def = @(Get-TemplateResources -Template $template -Type 'Microsoft.Authorization/policyDefinitions')
+        $def.Count | Should -Be 1
+        $mode = Get-PropertyValue -Object $def[0].Resource -Path 'properties.mode'
+        $mode.Found | Should -BeTrue
+        "$($mode.Value)" | Should -Be 'Indexed'
+        $rule = Get-PropertyValue -Object $def[0].Resource -Path 'properties.policyRule'
+        $rule.Found | Should -BeTrue
+        $text = ConvertTo-Json $rule.Value -Depth 30 -Compress
+        $text | Should -Match 'location'
+        $text | Should -Match 'global'
+        $text | Should -Match 'notEquals|notIn'
+    }
+
     It 'the assignment references the custom definition by id, and does not copy policyRule' {
         $as = @(Get-TemplateResources -Template $template -Type 'Microsoft.Authorization/policyAssignments')
         $as.Count | Should -Be 1

@@ -2,7 +2,7 @@
 
 ## Skill
 
-Create a tagged resource group at subscription scope and put a `CanNotDelete` lock on that group. The lock must target the group, not the subscription.
+Create a tagged resource group at subscription scope and put a `CanNotDelete` lock on that group. The lock must target the group, not the subscription: a resource-group-scoped module deployed with `scope: rg` (not `scope: rg` on the lock in the subscription file).
 
 ## Rules
 

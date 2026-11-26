@@ -6,7 +6,7 @@ Assign the built-in Allowed locations Policy at resource-group scope by referenc
 
 ## Rules
 
-Fresh copy via `scripts/rep.ps1`. No live Azure. No hints. Definition id `e56962a6-4747-49cd-b67b-bf8b01975c4c` through `subscriptionResourceId` or `tenantResourceId`. Pass `listOfAllowedLocations`.
+Fresh copy via `scripts/rep.ps1`. No live Azure. No hints. Definition id `e56962a6-4747-49cd-b67b-bf8b01975c4c` through `tenantResourceId` or the tenant-level `/providers/Microsoft.Authorization/policyDefinitions/<guid>` literal, not `subscriptionResourceId`. Pass `listOfAllowedLocations`.
 
 ## Target
 

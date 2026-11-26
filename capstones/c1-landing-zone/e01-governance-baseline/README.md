@@ -12,9 +12,9 @@ Attempt after A04. Management groups and Entra identity are **documentation-only
 
 - `targetScope` is `subscription`.
 - Guardrails resource group named from `rgName` (default `lagb-c1-e01-governance-baseline`), tagged with the course set (`course`, `unit`, `exercise`, `expires`, `owner`). `lab-up` overwrites `tags` with `New-LabTags` (including a fresh `expires`).
-- `Microsoft.Authorization/locks` named `lagb-cannotdelete`, `level` `CanNotDelete`, `scope` the resource group (not the subscription).
-- `Microsoft.Authorization/policyAssignments` named `lagb-allowed-locations` at **subscription** scope: built-in Allowed locations (`e56962a6-4747-49cd-b67b-bf8b01975c4c`) via `subscriptionResourceId` or `tenantResourceId`. Do not copy the definition. Deny/audit only.
-- `Microsoft.Authorization/roleAssignments`: built-in Reader (`acdd72a7-3385-48ef-bd42-f606fba81ae7` via `subscriptionResourceId`) at the resource group, `name = guid(<rg scope>, principalId, roleDefinitionId)`. `principalId` and `principalType` are parameters. Do not hard-code a GUID; do not use `newGuid()`.
+- `Microsoft.Authorization/locks` named `lagb-cannotdelete`, `level` `CanNotDelete`, on the resource group (not the subscription). In this subscription-scope file you cannot put `scope: rg` on the lock (BCP139): deploy a resource-group-scoped module with `scope: rg`.
+- `Microsoft.Authorization/policyAssignments` named `lagb-allowed-locations` at **subscription** scope: built-in Allowed locations (`e56962a6-4747-49cd-b67b-bf8b01975c4c`) via `tenantResourceId` or the tenant-level `/providers/Microsoft.Authorization/policyDefinitions/<guid>` literal. Do not use `subscriptionResourceId` for a built-in Policy definition. Do not copy the definition. The built-in is Indexed and excludes `global`, so it will not deny the A02 action group or budget.
+- `Microsoft.Authorization/roleAssignments`: built-in Reader (`acdd72a7-3385-48ef-bd42-f606fba81ae7` via `subscriptionResourceId`) at the resource group, also via a resource-group-scoped module (`scope: rg` on the module). `name = guid(resourceGroup().id, principalId, roleDefinitionId)`. `principalId` and `principalType` are parameters. Do not hard-code a GUID; do not use `newGuid()`.
 - `Microsoft.Consumption/budgets@2024-08-01` named `budgetName` (default `lagb-c1-baseline`, **not** the A02 gate name `lagb-monthly`): Actual 50/80/100 and Forecasted 80/100.
 - Location comes from the `location` parameter.
 
@@ -38,6 +38,6 @@ Live deploy is `pwsh -File ../../../scripts/lab/lab-up.ps1 -Path .` after `.lab-
 <details>
 <summary>Hint</summary>
 
-Subscription-scope file. Create the group, then `scope: rg` on the lock and the Reader assignment. The Allowed locations assignment stays at subscription scope (no `scope: rg`; `down.ps1` deletes it by name). Budget stays at subscription scope with five notifications. Modules in this folder are allowed.
+Subscription-scope file. Create the group. Put the lock and the Reader assignment in resource-group-scoped modules and deploy those modules with `scope: rg` (do not put `scope: rg` on the lock or role assignment in this file — BCP139). The Allowed locations assignment stays at subscription scope (`tenantResourceId` for the built-in; `down.ps1` deletes it by name). Budget stays at subscription scope with five notifications. Modules in this folder are allowed.
 
 </details>

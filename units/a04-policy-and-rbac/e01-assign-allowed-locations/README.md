@@ -10,7 +10,7 @@ Assign the built-in **Allowed locations** Policy at resource-group scope.
 
 - The compiled template contains `Microsoft.Authorization/policyAssignments`.
 - `targetScope` is `resourceGroup`.
-- Reference the built-in definition with `subscriptionResourceId` or `tenantResourceId` for `Microsoft.Authorization/policyDefinitions` and definition id `e56962a6-4747-49cd-b67b-bf8b01975c4c`. Do not copy the definition's `policyRule`.
+- Reference the built-in definition with a **tenant-level** id: `tenantResourceId('Microsoft.Authorization/policyDefinitions', 'e56962a6-4747-49cd-b67b-bf8b01975c4c')` or the literal `/providers/Microsoft.Authorization/policyDefinitions/e56962a6-4747-49cd-b67b-bf8b01975c4c`. Do not use `subscriptionResourceId` for a built-in Policy definition. Do not copy the definition's `policyRule`.
 - Pass `listOfAllowedLocations` (the built-in parameter name). Include `eastus`.
 - Effect is whatever the built-in definition uses; you are not writing a custom definition here.
 
@@ -21,6 +21,6 @@ From this folder: `pwsh -File ../../../scripts/check.ps1`. That grades *your* wo
 <details>
 <summary>Hint</summary>
 
-`policyDefinitionId: subscriptionResourceId('Microsoft.Authorization/policyDefinitions', 'e56962a6-4747-49cd-b67b-bf8b01975c4c')`. Parameters go under `properties.parameters.listOfAllowedLocations.value`.
+`policyDefinitionId: tenantResourceId('Microsoft.Authorization/policyDefinitions', 'e56962a6-4747-49cd-b67b-bf8b01975c4c')`. Parameters go under `properties.parameters.listOfAllowedLocations.value`.
 
 </details>

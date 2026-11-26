@@ -18,7 +18,8 @@ Describe 'a04-e01-assign-allowed-locations' {
         $defId.Found | Should -BeTrue
         $raw = ConvertTo-Json $template -Depth 40 -Compress
         $raw | Should -Match 'e56962a6-4747-49cd-b67b-bf8b01975c4c'
-        $raw | Should -Match 'subscriptionResourceId|tenantResourceId|/providers/Microsoft\.Authorization/policyDefinitions/'
+        $raw | Should -Match 'tenantResourceId|/providers/Microsoft\.Authorization/policyDefinitions/'
+        $raw | Should -Not -Match "subscriptionResourceId\('Microsoft\.Authorization/policyDefinitions'"
         $copied = Get-PropertyValue -Object $as[0].Resource -Path 'properties.policyRule'
         $copied.Found | Should -BeFalse
     }

@@ -12,6 +12,8 @@ Write a small custom Policy definition and assignment that guards lab SKUs and r
 - The compiled template contains `Microsoft.Authorization/policyDefinitions` and `Microsoft.Authorization/policyAssignments`.
 - The definition is yours (a lab SKU/region guard). Do not paste a built-in `policyRule`.
 - Effect is `deny` or `audit` only. Do not use `modify` or `deployIfNotExists` (those need a managed identity, `location`, and a remediation role).
+- `mode` is `'Indexed'` (not `'All'`). A location deny with mode `All` also evaluates resources whose location is `global` and will deny the A02 action group and budget.
+- Exclude `global` in the rule (same shape as the built-in Allowed locations deny: `field: 'location'` / `notEquals: 'global'`), so those subscription-scope global resources survive.
 - The assignment's `policyDefinitionId` is the custom definition, referenced with a resource id (the definition's `.id` or `subscriptionResourceId`), not a copied body.
 - Name the definition and the assignment `lagb-sku-region-guard` (`down.ps1` deletes those names).
 
@@ -30,6 +32,6 @@ Live deploy is `pwsh -File ../../../scripts/lab/lab-up.ps1 -Path .` after `.lab-
 <details>
 <summary>Hint</summary>
 
-Name both resources `lagb-sku-region-guard`. `then.effect` is `deny` or `audit`. The assignment's `policyDefinitionId` is `definition.id`.
+Name both resources `lagb-sku-region-guard`. `mode: 'Indexed'`. In `policyRule.if`, exclude `global` (`field: 'location'`, `notEquals: 'global'`). `then.effect` is `deny` or `audit`. The assignment's `policyDefinitionId` is `definition.id`.
 
 </details>

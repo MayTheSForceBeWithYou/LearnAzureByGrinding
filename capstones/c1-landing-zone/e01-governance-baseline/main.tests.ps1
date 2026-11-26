@@ -1,4 +1,40 @@
 BeforeAll {
+    function Get-ExtensionResourcePlacements {
+        param(
+            [Parameter(Mandatory)][System.Collections.IDictionary]$Template,
+            [Parameter(Mandatory)][string]$Type
+        )
+        $hits = [System.Collections.Generic.List[object]]::new()
+        function Walk([object]$resources, [string]$At) {
+            if ($null -eq $resources) { return }
+            foreach ($r in @($resources)) {
+                if ($r -isnot [System.Collections.IDictionary] -or -not $r.Contains('type')) { continue }
+                $t = [string]$r['type']
+                if ($t -ieq $Type) {
+                    $hits.Add([pscustomobject]@{ Resource = $r; Name = $r['name']; At = $At })
+                }
+                if ($t -ieq 'Microsoft.Resources/deployments') {
+                    $child = $At
+                    if ($r.Contains('resourceGroup') -and $null -ne $r['resourceGroup'] -and "$($r['resourceGroup'])") {
+                        $child = 'resourceGroup'
+                    }
+                    $inner = $null
+                    if ($r.Contains('properties') -and $r['properties'] -is [System.Collections.IDictionary]) {
+                        $p = $r['properties']
+                        if ($p.Contains('template') -and $p['template'] -is [System.Collections.IDictionary] -and $p['template'].Contains('resources')) {
+                            $inner = $p['template']['resources']
+                        }
+                    }
+                    Walk $inner $child
+                }
+                if ($r.Contains('resources')) { Walk $r['resources'] $At }
+            }
+        }
+        $rootAt = if ("$($Template['$schema'])" -match 'subscriptionDeploymentTemplate') { 'subscription' } else { 'resourceGroup' }
+        if ($Template.Contains('resources')) { Walk $Template['resources'] $rootAt }
+        @($hits)
+    }
+
     $root = $PSScriptRoot
     while ($root -and -not (Test-Path (Join-Path $root 'lib/AzGrinding.psd1'))) { $root = Split-Path $root -Parent }
     Import-Module (Join-Path $root 'lib/AzGrinding.psd1') -Force
@@ -41,9 +77,9 @@ Describe 'c1-e01-governance-baseline' {
         $lock = @(Get-TemplateResources -Template $template -Type 'Microsoft.Authorization/locks')
         $lock.Count | Should -Be 1
         (ConvertTo-Json $template -Depth 40 -Compress) | Should -Match 'lagb-cannotdelete'
-        $scope = Get-PropertyValue -Object $lock[0].Resource -Path 'scope'
-        $scope.Found | Should -BeTrue
-        "$($scope.Value)" | Should -Match 'resourceGroups'
+        $placed = @(Get-ExtensionResourcePlacements -Template $template -Type 'Microsoft.Authorization/locks')
+        $placed.Count | Should -Be 1
+        $placed[0].At | Should -Be 'resourceGroup'
     }
 
     It 'the Policy assignment references built-in Allowed locations by resource id at subscription scope' {
@@ -54,7 +90,8 @@ Describe 'c1-e01-governance-baseline' {
         $defId.Found | Should -BeTrue
         $raw = ConvertTo-Json $template -Depth 40 -Compress
         $raw | Should -Match 'e56962a6-4747-49cd-b67b-bf8b01975c4c'
-        $raw | Should -Match 'subscriptionResourceId|tenantResourceId|/providers/Microsoft\.Authorization/policyDefinitions/'
+        $raw | Should -Match 'tenantResourceId|/providers/Microsoft\.Authorization/policyDefinitions/'
+        $raw | Should -Not -Match "subscriptionResourceId\('Microsoft\.Authorization/policyDefinitions'"
         $copied = Get-PropertyValue -Object $as[0].Resource -Path 'properties.policyRule'
         $copied.Found | Should -BeFalse
         $scope = Get-PropertyValue -Object $as[0].Resource -Path 'scope'
@@ -79,9 +116,11 @@ Describe 'c1-e01-governance-baseline' {
         $n | Should -Not -Match 'newGuid\('
         $n | Should -Not -Match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-'
         $n | Should -Match 'principalId'
-        $scope = Get-PropertyValue -Object $ra[0].Resource -Path 'scope'
-        $scope.Found | Should -BeTrue
-        "$($scope.Value)" | Should -Match 'resourceGroups'
+        $placed = @(Get-ExtensionResourcePlacements -Template $template -Type 'Microsoft.Authorization/roleAssignments')
+        $placed.Count | Should -Be 1
+        $placed[0].At | Should -Be 'resourceGroup'
+        "$($placed[0].Name)" | Should -Match 'resourceGroup\(\)\.id|resourceGroups|resourceId\('
+        "$($placed[0].Name)" | Should -Not -Match 'subscription\(\)\.id'
     }
 
     It 'the budget is Monthly Cost with Actual 50/80/100 and Forecasted 80/100' {

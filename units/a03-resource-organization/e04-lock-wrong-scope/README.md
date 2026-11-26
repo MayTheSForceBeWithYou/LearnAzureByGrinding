@@ -6,9 +6,10 @@ The lock is at the wrong Azure scope. Find and fix it so it protects the resourc
 
 ## Constraints
 
-- The starter compiles. The defect is a real scope mistake: the lock is deployed at subscription scope instead of on the resource group.
+- The starter compiles. The defect is a real scope mistake: the lock is a resource in this subscription-scope file, so it locks the subscription.
 - Do not "fix" it by renaming the lock or by changing `level`. Change where the lock applies.
-- After the fix, `properties.level` is still `CanNotDelete`, and the lock's `scope` is the resource group `rg`.
+- Do not put `scope: rg` on the lock in this file — that is BCP139 and does not compile. Move the lock into a resource-group-scoped module and deploy that module with `scope: rg`.
+- After the fix, `properties.level` is still `CanNotDelete`, and the lock is deployed at the resource group `rg`.
 
 Required `ANSWER.md` headings (exact lines):
 

@@ -10,7 +10,8 @@ Add a `CanNotDelete` lock on the resource group already declared above the marke
 
 - The compiled template contains `Microsoft.Authorization/locks`.
 - `properties.level` is `CanNotDelete` (not `ReadOnly`).
-- The lock's `scope` is the resource group `rg`, not the subscription.
+- The lock must apply to the resource group `rg`, not the subscription.
+- In a `targetScope = 'subscription'` file you cannot put `scope: rg` on the lock resource (BCP139). Write a resource-group-scoped module and deploy it with `scope: rg` (see [scope for extension resources](https://learn.microsoft.com/azure/azure-resource-manager/bicep/scope-extension-resources)).
 - A lock name may be any valid string; `lagb-cannotdelete` is fine.
 
 ## Verify
@@ -20,6 +21,6 @@ From this folder: `pwsh -File ../../../scripts/check.ps1`. That grades *your* wo
 <details>
 <summary>Hint</summary>
 
-At subscription scope, an `Microsoft.Authorization/locks` resource without `scope: rg` locks the subscription. Set `scope: rg`.
+Add `lock.bicep` with `targetScope = 'resourceGroup'` and the `Microsoft.Authorization/locks` resource. From `main.bicep`, `module lockMod 'lock.bicep' = { name: 'lagb-lock'; scope: rg }`. Putting `scope: rg` on the lock in this file is BCP139.
 
 </details>

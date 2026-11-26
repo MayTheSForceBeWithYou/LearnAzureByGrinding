@@ -6,9 +6,10 @@ The Reader assignment's scope lands on the subscription instead of the resource 
 
 ## Constraints
 
-- The starter compiles. The defect is a real scope mistake, not a typo in a name or GUID.
+- The starter compiles. The defect is a real scope mistake, not a typo in a name or GUID: the assignment is a resource in this subscription-scope file, so it applies at the subscription.
 - Keep the built-in Reader role (`acdd72a7-3385-48ef-bd42-f606fba81ae7` via `subscriptionResourceId`).
-- Keep `name = guid(<the assignment's actual scope>, principalId, roleDefinitionId)`. After the fix, the first `guid` argument is the resource group, matching `scope: rg`.
+- Keep `name = guid(<the assignment's actual scope>, principalId, roleDefinitionId)`. After the fix, the first `guid` argument is `resourceGroup().id` (inside a resource-group-scoped module).
+- Do not put `scope: rg` on the role assignment in this file — that is BCP139 and does not compile. Move the assignment into a resource-group-scoped module and deploy that module with `scope: rg`.
 - Do not hard-code a GUID and do not use `newGuid()`.
 
 Required `ANSWER.md` headings (exact lines):
