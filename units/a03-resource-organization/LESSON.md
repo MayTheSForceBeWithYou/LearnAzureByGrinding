@@ -24,16 +24,9 @@ Resource groups are deployed at **subscription scope**. A subscription-scoped Bi
 ```bicep
 targetScope = 'subscription'
 
-param location string = deployment().location
-param resourceGroupName string
-
 resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
-  name: resourceGroupName
-  location: location
-  tags: {
-    environment: 'dev'
-    owner: 'team-platform'
-  }
+  name: 'my-rg'
+  location: 'eastus'
 }
 ```
 
@@ -43,14 +36,16 @@ The `location` property is required and specifies where Azure stores the resourc
 
 A **tag** is a name-value pair attached to a resource or resource group. Tags organize resources for billing, automation, or policy enforcement. The Azure portal, CLI, and billing exports show tags. Common tag names include `environment`, `owner`, `cost-center`, and `expires`.
 
-Tags are set in the `tags` property:
+Tags are set in the `tags` property on resources:
 
 ```bicep
-targetScope = 'subscription'
+targetScope = 'resourceGroup'
 
-resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
-  name: 'my-rg'
-  location: 'eastus'
+resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: 'mystorageaccount'
+  location: resourceGroup().location
+  sku: { name: 'Standard_LRS' }
+  kind: 'StorageV2'
   tags: {
     environment: 'production'
     'cost-center': '1234'
@@ -129,29 +124,46 @@ The `name` is the management group's ID; the `displayName` is what the portal sh
 
 Management-group scope is wider than subscription scope: a Policy or role assignment at management-group scope applies to every subscription in that management group and their resource groups and resources. Policy and RBAC assignments inherit downward from management groups, just as they do from subscriptions.
 
-## Worked example: A resource group with tags and inherited locks
+## Worked example: Cross-scope lock on an existing storage account
 
-You need a production resource group in East US, tagged for the platform team and cost center 1234. You will deploy it at subscription scope and understand how locks and tags interact with resources inside.
+You have a production storage account in an existing resource group. You need to set a ReadOnly lock on that account from a subscription-scoped deployment. You cannot write `scope: resourceGroup(...)` directly on the lock in a subscription-scoped file (BCP139: scope changes require a module). Instead, you deploy a module that targets the resource group and places the lock on the storage account.
 
-Here is the Bicep file:
+Here is the subscription-scoped main file:
 
 ```bicep
 targetScope = 'subscription'
 
-param location string = deployment().location
-param resourceGroupName string = 'prod-platform-rg'
+param rgName string
+param storageAccountName string
 
-resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
-  name: resourceGroupName
-  location: location
-  tags: {
-    environment: 'production'
-    owner: 'team-platform'
-    'cost-center': '1234'
+module storageLock 'storage-lock.bicep' = {
+  scope: resourceGroup(rgName)
+  name: 'storage-lock-deployment'
+  params: {
+    storageAccountName: storageAccountName
   }
 }
+```
 
-output resourceGroupId string = rg.id
+The module file `storage-lock.bicep`:
+
+```bicep
+targetScope = 'resourceGroup'
+
+param storageAccountName string
+
+resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
+  name: storageAccountName
+}
+
+resource lock 'Microsoft.Authorization/locks@2020-05-01' = {
+  scope: storage
+  name: 'readonly-lock'
+  properties: {
+    level: 'ReadOnly'
+    notes: 'Prevent configuration changes to production storage'
+  }
+}
 ```
 
 You deploy this with:
@@ -160,12 +172,12 @@ You deploy this with:
 az deployment sub create \
   --location eastus \
   --template-file main.bicep \
-  --parameters location=eastus
+  --parameters rgName=prod-rg storageAccountName=mystorageaccount
 ```
 
-After deployment, the resource group exists with the tags. If you later add a lock to the resource group (via portal, CLI, or a subsequent deployment), that lock applies to every resource inside the group. For example, a CanNotDelete lock on the resource group prevents deletion of the group and of any storage account, VM, or other resource in the group. The lock inherits downward.
+After deployment, the storage account has a ReadOnly lock. Configuration changes (SKU, firewall rules) are blocked. The `listKeys` operation is blocked (it returns secrets via a POST request). Data-plane operations (blob uploads) succeed if you use Microsoft Entra authentication or already have the keys.
 
-**The plausible wrong reading.** You might expect the tags on the resource group to automatically apply to resources you deploy into it, so a storage account in this resource group would inherit the `environment=production` tag. That is not true. Tags do not inherit by default. If you deploy a storage account into this resource group without setting its `tags` property, the account has no tags. To enforce tag inheritance, use the built-in Azure Policy "Inherit a tag from the resource group" (Modify effect). Unlike tags, locks DO inherit downward automatically.
+**The plausible wrong reading.** You might expect that writing `scope: resourceGroup(rgName)` directly on the lock resource in the subscription-scoped file is enough. That is not true. Bicep raises BCP139 when you change the scope of an extension resource without a module. The module deployed with `scope: resourceGroup(...)` changes the deployment target, and the module's resource-group-scoped lock then uses `scope: storage` to target the storage account within that scope.
 
 ## Worked example: What a ReadOnly lock blocks
 
