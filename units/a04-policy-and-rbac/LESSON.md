@@ -246,24 +246,29 @@ These are reference, not the reading. The lesson is the reading; the links are w
 
 ## Check yourself
 
-<details>
-<summary>Answers</summary>
+1. **You assign a Deny Policy at subscription scope that blocks storage accounts outside East US. A storage account in West US already exists. What happens to that account?**
+<details><summary>Answer</summary>
+Nothing. The account is flagged as non-compliant, but Deny policies do not delete existing resources. New storage accounts outside East US are blocked. To remediate the existing account, you must delete and recreate it in East US, or use Azure Resource Mover where supported (storage accounts can be moved between regions with Resource Mover).
+</details>
 
-1. **You assign a Deny Policy at subscription scope that blocks storage accounts outside East US. A storage account in West US already exists. What happens to that account?**  
-   Nothing. The account is flagged as non-compliant, but Deny policies do not delete existing resources. New storage accounts outside East US are blocked. To remediate the existing account, you must delete it manually or move it to East US (if the resource type supports moves).
+2. **A Policy definition has the Audit effect. You deploy a resource that violates the Policy. Does the deployment succeed?**
+<details><summary>Answer</summary>
+Yes. Audit logs the violation but allows the operation to proceed. The resource is created and flagged as non-compliant. If the Policy had the Deny effect, the deployment would fail.
+</details>
 
-2. **A Policy definition has the Audit effect. You deploy a resource that violates the Policy. Does the deployment succeed?**  
-   Yes. Audit logs the violation but allows the operation to proceed. The resource is created and flagged as non-compliant. If the Policy had the Deny effect, the deployment would fail.
+3. **A user is assigned Reader at subscription scope and Contributor at resource-group scope for `dev-rg`. What access does the user have to `dev-rg`? What about other resource groups in the subscription?**
+<details><summary>Answer</summary>
+The user has Contributor access to `dev-rg` (full resource access, but cannot manage RBAC). The user has Reader access to other resource groups in the subscription. RBAC is additive: the effective permissions are the union of all assignments.
+</details>
 
-3. **A user is assigned Reader at subscription scope and Contributor at resource-group scope for `dev-rg`. What access does the user have to `dev-rg`? What about other resource groups in the subscription?**  
-   The user has Contributor access to `dev-rg` (full resource access, but cannot manage RBAC). The user has Reader access to other resource groups in the subscription. RBAC is additive: the effective permissions are the union of all assignments.
+4. **You need to grant a service principal the ability to assign roles in a resource group, but you do not want it to create or modify resources. Which role do you assign?**
+<details><summary>Answer</summary>
+Role Based Access Control Administrator (recommended) or User Access Administrator. Both can read resources and manage role assignments, but neither writes non-Authorization resources. RBAC Administrator is narrower (only role assignments, not Policy or locks) and supports ABAC conditions. Owner has full resource access; Contributor can write resources but not manage RBAC.
+</details>
 
-4. **You need to grant a service principal the ability to assign roles in a resource group, but you do not want it to create or modify resources. Which role do you assign?**  
-   Role Based Access Control Administrator (recommended) or User Access Administrator. Both can read resources and manage role assignments, but neither writes non-Authorization resources. RBAC Administrator is narrower (only role assignments, not Policy or locks) and supports ABAC conditions. Owner has full resource access; Contributor can write resources but not manage RBAC.
-
-5. **Can you create a Policy assignment whose definition has the Modify effect without a managed identity? What if the managed identity exists but has no role assignments?**  
-   No identity: assignment creation fails (portal and ARM require `identity` and `location` on the assignment). Identity exists but has no role assignments: the assignment is created, but remediation and the Modify operations fail because the identity lacks permissions for the `roleDefinitionIds` the definition declares. Deny and Audit do not need a managed identity.
-
+5. **Can you create a Policy assignment whose definition has the Modify effect without a managed identity? What if the managed identity exists but has no role assignments?**
+<details><summary>Answer</summary>
+No identity: assignment creation fails (portal and ARM require `identity` and `location` on the assignment). Identity exists but has no role assignments: the assignment is created, but remediation and the Modify operations fail because the identity lacks permissions for the `roleDefinitionIds` the definition declares. Deny and Audit do not need a managed identity.
 </details>
 
 ## Takeaways

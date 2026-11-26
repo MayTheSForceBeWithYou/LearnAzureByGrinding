@@ -46,6 +46,8 @@ A **tag** is a name-value pair attached to a resource or resource group. Tags or
 Tags are set in the `tags` property:
 
 ```bicep
+targetScope = 'subscription'
+
 resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: 'my-rg'
   location: 'eastus'
@@ -89,6 +91,22 @@ module lock 'lock.bicep' = {
 }
 ```
 
+The module file `lock.bicep`:
+
+```bicep
+targetScope = 'resourceGroup'
+
+param lockName string
+param level string
+
+resource lock 'Microsoft.Authorization/locks@2020-05-01' = {
+  name: lockName
+  properties: {
+    level: level
+  }
+}
+```
+
 Locks **inherit downward**: a lock on a resource group applies to every resource in the group, and a lock on a subscription applies to every resource group and resource in the subscription. A child resource cannot remove a parent lock. To delete a resource in a locked resource group, you must first remove the lock at the resource group level.
 
 To create or delete locks, you need `Microsoft.Authorization/*` or `Microsoft.Authorization/locks/*` actions. The Owner and User Access Administrator built-in roles have these permissions (some specialized roles also grant this access). Contributor does not.
@@ -126,7 +144,7 @@ Management-group scope is wider than subscription scope: a Policy or role assign
 
 You need a production resource group in East US, tagged for the platform team and cost center 1234, locked against accidental deletion. You will deploy it at subscription scope and verify the lock prevents deletion.
 
-Here is the Bicep file:
+Here is the Bicep file (`main.bicep`):
 
 ```bicep
 targetScope = 'subscription'
@@ -144,16 +162,35 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   }
 }
 
-resource lock 'Microsoft.Authorization/locks@2020-05-01' = {
+module lock 'lock.bicep' = {
   scope: rg
-  name: 'prevent-delete'
-  properties: {
+  name: 'prevent-delete-deployment'
+  params: {
+    lockName: 'prevent-delete'
     level: 'CanNotDelete'
     notes: 'Production resource group must not be deleted accidentally'
   }
 }
 
 output resourceGroupId string = rg.id
+```
+
+The module file `lock.bicep`:
+
+```bicep
+targetScope = 'resourceGroup'
+
+param lockName string
+param level string
+param notes string = ''
+
+resource lock 'Microsoft.Authorization/locks@2020-05-01' = {
+  name: lockName
+  properties: {
+    level: level
+    notes: notes
+  }
+}
 ```
 
 You deploy this with:
@@ -208,24 +245,29 @@ These are reference, not the reading. The lesson is the reading; the links are w
 
 ## Check yourself
 
-<details>
-<summary>Answers</summary>
+1. **A resource group in West US contains a storage account. You set the storage account's location to East US. What happens?**
+<details><summary>Answer</summary>
+The deployment succeeds. The resource group's location is metadata only and does not constrain the resources inside. The storage account is created in East US, and the resource group metadata stays in West US.
+</details>
 
-1. **A resource group in West US contains a storage account. You set the storage account's location to East US. What happens?**  
-   The deployment succeeds. The resource group's location is metadata only and does not constrain the resources inside. The storage account is created in East US, and the resource group metadata stays in West US.
+2. **A resource group has the tag `environment=production`. You deploy a storage account into that resource group without setting the account's `tags` property. What tags does the storage account have?**
+<details><summary>Answer</summary>
+None. Tags do not inherit automatically. If you want the storage account to have the `environment=production` tag, you must set it in the account's `tags` property, or use Azure Policy to apply tag inheritance.
+</details>
 
-2. **A resource group has the tag `environment=production`. You deploy a storage account into that resource group without setting the account's `tags` property. What tags does the storage account have?**  
-   None. Tags do not inherit automatically. If you want the storage account to have the `environment=production` tag, you must set it in the account's `tags` property, or use Azure Policy to apply tag inheritance.
+3. **A resource group has a CanNotDelete lock. You try to change a storage account's SKU inside that group. What happens?**
+<details><summary>Answer</summary>
+The SKU change succeeds. CanNotDelete allows reads and updates; it only prevents deletion. If the resource group had a ReadOnly lock, the SKU change would be blocked.
+</details>
 
-3. **A resource group has a CanNotDelete lock. You try to change a storage account's SKU inside that group. What happens?**  
-   The SKU change succeeds. CanNotDelete allows reads and updates; it only prevents deletion. If the resource group had a ReadOnly lock, the SKU change would be blocked.
+4. **A storage account has a ReadOnly lock. You upload a blob to a container in that account. What happens?**
+<details><summary>Answer</summary>
+The upload succeeds. ReadOnly locks apply to the control plane (Azure Resource Manager operations on the storage account resource), not the data plane (blob operations).
+</details>
 
-4. **A storage account has a ReadOnly lock. You upload a blob to a container in that account. What happens?**  
-   The upload succeeds. ReadOnly locks apply to the control plane (Azure Resource Manager operations on the storage account resource), not the data plane (blob operations).
-
-5. **You move a storage account from one resource group to another in the same subscription. Does the storage account's location change?**  
-   No. Moving a resource between resource groups (or subscriptions) changes which container the resource belongs to, but it does not change the resource's location. The storage account stays in the same Azure region.
-
+5. **You move a storage account from one resource group to another in the same subscription. Does the storage account's location change?**
+<details><summary>Answer</summary>
+No. Moving a resource between resource groups (or subscriptions) changes which container the resource belongs to, but it does not change the resource's location. The storage account stays in the same Azure region.
 </details>
 
 ## Takeaways

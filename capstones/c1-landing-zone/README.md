@@ -17,7 +17,7 @@ After this capstone you can:
 A subscription-scoped Bicep deployment (`main.bicep` at subscription scope) that declares:
 
 1. **A resource group** named `lagb-c1-e01-governance-baseline` (from `rgName` parameter), with the five course tags (`course`, `unit`, `exercise`, `expires`, `owner`). `lab-up` overwrites `tags` with fresh values including a new `expires`.
-2. **A CanNotDelete lock** named `lagb-cannotdelete` on the resource group (not the subscription), scoped with `scope: rg` or via a module.
+2. **A CanNotDelete lock** named `lagb-cannotdelete` on the resource group (not the subscription), deployed via a module with `scope: rg`.
 3. **A Policy assignment** at subscription scope: the built-in "Allowed locations" Policy (`e56962a6-4747-49cd-b67b-bf8b01975c4c`) restricting deployments to allowed locations. Use `subscriptionResourceId` or `tenantResourceId` to reference the built-in definition; do not copy the definition. Deny or audit only.
 4. **A role assignment** at resource-group scope: assign the built-in Reader role (`acdd72a7-3385-48ef-bd42-f606fba81ae7`) to a principal ID passed as a parameter, `name = guid(<rg scope>, principalId, roleDefinitionId)`. Pass `principalId` and `principalType` as parameters. Do not hard-code a GUID; do not use `newGuid()`.
 5. **A budget** named `lagb-c1-baseline` (from `budgetName` parameter; **not** the A02 gate budget `lagb-monthly`): `Microsoft.Consumption/budgets@2024-08-01` at subscription scope with Actual 50/80/100% and Forecasted 80/100% alerts (five notifications, the per-budget maximum).
@@ -28,7 +28,7 @@ Management groups and Microsoft Entra identities are **documentation only** in t
 
 - **Scope:** subscription. The main template is `targetScope = 'subscription'`.
 - **Offline-testable:** the template must compile, lint clean, pass PSRule, and satisfy structural tests (ExpectResources, ExpectProperties) without deploying to Azure. The harness grades the compiled JSON.
-- **Optional free `[LAB]`:** you may deploy this to your lab subscription with `lab-up` to verify the Policy and role assignment work. Policy, tags, locks, and RBAC assignments are free. The budget is a monitoring resource and does not bill. **Teardown:** `lab-down` calls `down.ps1`, which removes the lock **before** deleting the group, then removes the Policy assignment, role assignments, budget, and resource group.
+- **Optional free `[LAB]`:** you may deploy this to your lab subscription with `lab-up` to verify the Policy and role assignment work. Policy, tags, locks, and RBAC assignments are free. The budget is a monitoring resource and does not bill. **Teardown:** `lab-down` calls `down.ps1`, which removes the lock, then the Policy assignment, then role assignments, then the budget, then the resource group (in that order).
 - **Parameterization:** the template must accept parameters for the resource group name, budget name and amount, and the principal ID and type for the role assignment. Use defaults where sensible.
 - **Idempotence:** redeploying the template must succeed without errors. Use `guid()` for the role assignment name so it generates the same GUID on every deploy.
 
@@ -44,7 +44,7 @@ The harness compiles the template, checks that it is lint- and PSRule-clean, and
 
 ## Hints
 
-There is one hint: compose this from the patterns you have already written in A02 (budget and action group), A03 (resource groups, tags, locks), and A04 (Policy and role assignments). Do not start from scratch; copy and adapt the smaller pieces. The challenge is integration, not authoring each piece from memory. For the lock, use a module deployed with `scope: rg`, or deploy it in a resource-group-scoped file called as a module.
+There is one hint: compose this from the patterns you have already written in A02 (budget and action group), A03 (resource groups, tags, locks), and A04 (Policy and role assignments). Do not start from scratch; copy and adapt the smaller pieces. The challenge is integration, not authoring each piece from memory. For the lock, use a module deployed with `scope: rg`.
 
 ## Documentation-only (not in the template)
 
