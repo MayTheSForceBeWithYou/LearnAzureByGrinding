@@ -1,0 +1,36 @@
+[
+  {
+    "id": "/providers/Microsoft.Management/managementGroups/00000000-0000-0000-0000-000000000000",
+    "name": "00000000-0000-0000-0000-000000000000",
+    "type": "Microsoft.Management/managementGroups",
+    "properties": {
+      "tenantId": "00000000-0000-0000-0000-000000000000",
+      "displayName": "Tenant Root Group",
+      "details": {
+        "version": 1,
+        "updatedBy": "00000000-0000-0000-0000-000000000000",
+        "updatedTime": "2020-01-01T00:00:00.0000000Z",
+        "parent": {
+          "id": null
+        }
+      }
+    }
+  },
+  {
+    "id": "/providers/Microsoft.Management/managementGroups/mg-course-example",
+    "name": "mg-course-example",
+    "type": "Microsoft.Management/managementGroups",
+    "properties": {
+      "tenantId": "00000000-0000-0000-0000-000000000000",
+      "displayName": "Course example",
+      "details": {
+        "version": 1,
+        "updatedBy": "00000000-0000-0000-0000-000000000000",
+        "updatedTime": "2020-01-01T00:00:00.0000000Z",
+        "parent": {
+          "id": "/providers/Microsoft.Management/managementGroups/00000000-0000-0000-0000-000000000000"
+        }
+      }
+    }
+  }
+]
