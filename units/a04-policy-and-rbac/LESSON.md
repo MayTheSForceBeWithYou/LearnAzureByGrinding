@@ -57,10 +57,10 @@ A policy definition's `effect` controls what happens when a resource violates th
 - **Deny**: blocks the resource creation or update. The request fails with a Policy violation error.
 - **Audit**: logs the violation but allows the operation to proceed.
 - **AuditIfNotExists** and **DeployIfNotExists**: evaluate whether a related resource exists. AuditIfNotExists logs a violation if the related resource is missing. DeployIfNotExists creates the missing resource after the deployment succeeds.
-- **Modify**: alters create or update requests (for example, "set the minimum TLS version to 1.2"). The assignment requires a managed identity with a role assignment covering the `roleDefinitionIds` the definition declares.
+- **Modify**: alters create or update requests (for example, "set the minimum TLS version to 1.2"). The assignment requires a managed identity (portal and ARM require `identity` and `location` on the assignment). The identity also needs a role assignment covering the `roleDefinitionIds` the definition declares, or remediation and Modify operations fail.
 - **Disabled**: the Policy is assigned but not evaluated.
 
-Deny and Audit are the most common. Deny blocks non-compliant resources at deployment. Audit allows them through but flags them. Modify and DeployIfNotExists assignments require a managed identity and role assignments; existing non-compliant resources need a remediation task to apply the change.
+Deny and Audit are the most common. Deny blocks non-compliant resources at deployment. Audit allows them through but flags them. Modify and DeployIfNotExists assignments require a managed identity (`identity` and `location` on the assignment); the identity also needs role assignments covering the definition's `roleDefinitionIds`, or remediation fails. Existing non-compliant resources need a remediation task.
 
 ### Custom Policy definitions
 
@@ -116,10 +116,10 @@ This definition denies resources outside the allowed locations or storage accoun
 Azure provides built-in roles:
 
 - **Owner**: full access, including managing RBAC assignments.
-- **Contributor**: full resource access, but `NotActions` exclude `Microsoft.Authorization/*/Write` and `*/Delete` (among others), so it cannot manage RBAC.
+- **Contributor**: full resource access, but `NotActions` exclude `Microsoft.Authorization/*/Write` and `*/Delete` (among others), so it cannot manage RBAC, Policy, or locks.
 - **Reader**: read-only access.
-- **User Access Administrator**: manage role assignments only, no resource access.
-- **Role Based Access Control Administrator**: create and delete role assignments at the assigned scope, plus read resources. Can be constrained with ABAC conditions to restrict which roles or principals it manages.
+- **User Access Administrator**: `*/read` and `Microsoft.Authorization/*`. Can read all resources and manage all Authorization (role assignments, role definitions, Policy assignments, locks). Broad delegation scope.
+- **Role Based Access Control Administrator**: `*/read` and `Microsoft.Authorization/roleAssignments/*`. Can read all resources but only manage role assignments. Narrower delegation; supports ABAC conditions to constrain which roles or principals it assigns.
 - Many resource-specific roles: **Storage Blob Data Contributor**, **Virtual Machine Contributor**, etc.
 
 RBAC is **additive**: the principal's effective permissions are the union of all role assignments at all scopes. Azure also supports **deny assignments** (explicit denials that override allow), created by Azure features such as Deployment Stacks (deny settings) and managed applications, not directly by users.
@@ -226,8 +226,8 @@ Deploy this at resource-group scope with `az deployment group create --resource-
 | Deny vs Audit | Deny blocks non-compliant resources at deployment. Audit allows them through but logs the violation. |
 | Modify vs DeployIfNotExists | Modify alters create/update requests. DeployIfNotExists creates a missing related resource after the deployment succeeds. Both assignments require a managed identity and role assignments. Existing non-compliant resources need remediation tasks. Deny and Audit do not. |
 | Role definition vs role assignment | A role definition is a set of permissions. A role assignment attaches the role to a principal at a scope. Without an assignment, the definition has no effect. |
-| Owner vs Contributor | Owner has full access including RBAC management. Contributor's `NotActions` exclude `Microsoft.Authorization/*/Write` and `*/Delete`, so it cannot manage RBAC. |
-| User Access Administrator vs Role Based Access Control Administrator | User Access Administrator manages role assignments only. Role Based Access Control Administrator manages role assignments and can read resources. Both lack resource write access. Use ABAC conditions on the latter to constrain which roles or principals it manages. |
+| Owner vs Contributor | Owner has full access including RBAC. Contributor's `NotActions` exclude `Microsoft.Authorization/*/Write` and `*/Delete`, so it cannot manage RBAC, Policy, or locks. |
+| User Access Administrator vs Role Based Access Control Administrator | UAA has `*/read` and `Microsoft.Authorization/*` (all Authorization: role assignments, definitions, Policy, locks). RBAC Administrator has `*/read` and only `Microsoft.Authorization/roleAssignments/*` (narrower). Neither writes non-Authorization resources. RBAC Administrator supports ABAC conditions to constrain delegation; Microsoft recommends it over UAA. |
 | Contributor vs Reader | Contributor has full resource access (create, update, delete). Reader is read-only. |
 | RBAC is additive (except deny assignments) | The principal's effective permissions are the union of all role assignments at all scopes. Azure deny assignments (created by Deployment Stacks, managed applications, and other Azure features, not directly by users) override allow. |
 | Scope inheritance | Policy assignments and role assignments inherit downward. A child scope cannot remove a parent assignment. |
@@ -265,20 +265,20 @@ These are reference, not the reading. The lesson is the reading; the links are w
    The user has Contributor access to `dev-rg` (full resource access, but cannot manage RBAC). The user has Reader access to other resource groups in the subscription. RBAC is additive: the effective permissions are the union of all assignments.
 
 4. **You need to grant a service principal the ability to assign roles in a resource group, but you do not want it to create or modify resources. Which role do you assign?**  
-   User Access Administrator or Role Based Access Control Administrator. Both manage role assignments but cannot create or modify resources. Owner can do both; Contributor can create resources but not manage RBAC.
+   Role Based Access Control Administrator (recommended) or User Access Administrator. Both can read resources and manage role assignments, but neither writes non-Authorization resources. RBAC Administrator is narrower (only role assignments, not Policy or locks) and supports ABAC conditions. Owner has full resource access; Contributor can write resources but not manage RBAC.
 
-5. **Can you create a Policy assignment whose definition has the Modify effect without configuring a managed identity and role assignments on the assignment?**  
-   No. The assignment creation fails (portal and ARM require `identity` and `location`). Modify and DeployIfNotExists assignments write on behalf of the caller, so they must have a managed identity with role assignments covering the `roleDefinitionIds` the definition declares. Deny and Audit assignments do not need a managed identity.
+5. **Can you create a Policy assignment whose definition has the Modify effect without a managed identity? What if the managed identity exists but has no role assignments?**  
+   No identity: assignment creation fails (portal and ARM require `identity` and `location` on the assignment). Identity exists but has no role assignments: the assignment is created, but remediation and the Modify operations fail because the identity lacks permissions for the `roleDefinitionIds` the definition declares. Deny and Audit do not need a managed identity.
 
 </details>
 
 ## Takeaways
 
 - Policy definitions are rules; policy assignments attach definitions to scopes and pass parameters.
-- Deny blocks non-compliant resources at deployment; Audit logs violations. Modify and DeployIfNotExists assignments require a managed identity with role assignments; existing non-compliant resources need remediation tasks.
+- Deny blocks non-compliant resources at deployment; Audit logs violations. Modify and DeployIfNotExists assignments require a managed identity (without it, creation fails); the identity also needs role assignments for the definition's `roleDefinitionIds` (without them, remediation fails). Existing non-compliant resources need remediation tasks.
 - Policy assignments and role assignments inherit downward: assigned at subscription scope, they apply to every resource group and resource in the subscription.
 - RBAC is additive: the principal's effective permissions are the union of all role assignments, except deny assignments (created by Deployment Stacks and other Azure features) override allow.
-- Owner has full access including RBAC; Contributor's `NotActions` exclude RBAC management; User Access Administrator and Role Based Access Control Administrator manage role assignments but cannot write resources; Reader is read-only.
+- Owner has full access including RBAC; Contributor's `NotActions` exclude RBAC/Policy/locks; User Access Administrator has `*/read` and `Microsoft.Authorization/*` (all Authorization); Role Based Access Control Administrator has `*/read` and only `roleAssignments/*` (narrower, supports ABAC conditions); Reader is read-only.
 - Policy is free for Azure resources; Arc-connected servers with machine configuration cost $6/server/month.
 
 ## Exercises
