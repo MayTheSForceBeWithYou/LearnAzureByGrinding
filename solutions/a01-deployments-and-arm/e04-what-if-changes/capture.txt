@@ -1,0 +1,33 @@
+# Real az deployment group what-if capture from 25 Nov 2026.
+# Subscription ID redacted to 00000000-0000-0000-0000-000000000000 because this repository is public.
+# Captured from arm-parameterized-storage-template.json with parameters
+# storageSKU=Standard_GRS storageName=n8deploy20261122.
+# That ARM JSON is not this exercise's main.bicep; this file is not hashed
+# against main.bicep because the captured template and the neighbour Bicep differ.
+$templateFile = "arm-parameterized-storage-template.json"
+$DeploymentName = "addSkuParameter-$today"
+az deployment group what-if --name $DeploymentName --template-file $templateFile --parameters storageSKU=Standard_GRS storageName=n8deploy20261122
+Note: The result may contain false positive predictions (noise).
+You can help us improve the accuracy of the result by opening an issue here: https://aka.ms/WhatIfIssues
+NOTICE! - Want to get What-if without noise? Move to Deployment Stacks What-If https://aka.ms/stackswhatifGA
+
+Resource and property changes are indicated with this symbol:
+  + Create
+
+The deployment will update the following scope:
+
+Scope: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/arm-template-group
+
+  + Microsoft.Storage/storageAccounts/n8deploy20261122 [2025-01-01]
+
+      apiVersion:                          "2025-01-01"
+      id:                                  "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/arm-template-group/providers/Microsoft.Storage/storageAccounts/n8deploy20261122"
+      kind:                                "StorageV2"
+      location:                            "westus"
+      name:                                "n8deploy20261122"
+      properties.supportsHttpsTrafficOnly: true
+      sku.name:                            "Standard_GRS"
+      tags.displayName:                    "n8deploy20261122"
+      type:                                "Microsoft.Storage/storageAccounts"
+
+Resource changes: 1 to create.

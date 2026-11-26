@@ -2,21 +2,27 @@
 
 ## Goal
 
-Predict what-if change types for this template against the current state described below. Do not sign into Azure. A live `az deployment group what-if` capture is not in the tree yet.
+Predict the what-if change types in `capture.txt` for this Incremental deployment. Do not sign into Azure. Write `ANSWER.md` first, then check it against the capture.
 
 ## Constraints
 
-- Current state (described, not live): the resource group already has one storage account whose name equals `existingName` (the default `st${uniqueString(resourceGroup().id)}`) with SKU `Standard_LRS`. Nothing else is in the group.
-- The template changes that account's SKU to `Standard_GRS` and adds a second account.
+- Current state (described, not live): resource group `arm-template-group` does not already contain storage account `n8deploy20261122`.
+- The capture was taken from ARM JSON `arm-parameterized-storage-template.json` with `storageSKU=Standard_GRS` and `storageName=n8deploy20261122`. `main.bicep` in this folder is a neighbour (one parameterized StorageV2 account). It is not the captured ARM JSON.
 - Incremental mode (the default).
-- `ANSWER.md` uses the required headings. Quote symbols from the lesson table (`+` Create, `~` Modify, `*` Ignore). Do not invent a full what-if payload.
-- No what-if capture file is checked in. Do not invent `az` stdout. This item stays incomplete until a real `az deployment group what-if` capture is added.
+- `ANSWER.md` uses the required headings. Quote symbols from the lesson table and from `capture.txt`. Do not invent a full what-if payload. Do not write a Modify (`~`) transcript; this capture does not contain one.
 
 Required `ANSWER.md` headings (exact lines):
 
 - `## Create`
 - `## Modify`
 - `## Ignore`
+
+<details>
+<summary>Hint</summary>
+
+Read the legend under `Resource and property changes are indicated with this symbol` and the `Resource changes:` summary line. Those lines list every change type this capture actually predicted.
+
+</details>
 
 ## Verify
 
