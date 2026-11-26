@@ -56,7 +56,7 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
 }
 ```
 
-Tags on a resource group are **not automatically inherited** by the resources inside. If you want every resource in a production resource group to have an `environment=production` tag, you must set it on each resource, or use Azure Policy to apply and enforce tag inheritance. Tag names and values are case-sensitive. Tag names can be up to 512 characters; tag values can be up to 256 characters.
+Tags on a resource group are **not automatically inherited** by the resources inside. If you want every resource in a production resource group to have an `environment=production` tag, you must set it on each resource, or use the built-in Azure Policy "Inherit a tag from the resource group" (Modify effect) to apply and enforce tag inheritance. Tag names and values are case-sensitive. Tag names can be up to 512 characters; tag values can be up to 256 characters.
 
 The course requires five tags on lab resource groups and resources: `course`, `unit`, `exercise`, `expires`, and `owner` (section A02). The `lab-up` script writes these tags on the resource group it creates. Without Policy, resources deployed into that group do not inherit the tags unless you set them in the resource's own `tags` property.
 
@@ -67,7 +67,7 @@ A **lock** prevents accidental deletion or modification. Azure supports two lock
 - **CanNotDelete**: allows reads and updates, but prevents deletion.
 - **ReadOnly**: allows reads only. All writes (create, update, delete) are blocked.
 
-Locks apply to the **control plane** (Azure Resource Manager operations), not the data plane. A CanNotDelete lock on a storage account prevents you from deleting the account, but it does not prevent you from uploading or deleting blobs inside it. A ReadOnly lock on a storage account prevents you from changing the account's configuration (SKU, firewall rules), but it does not prevent data-plane operations.
+Locks apply to the **control plane** (operations at `https://management.azure.com`), not the data plane. A CanNotDelete lock on a storage account prevents you from deleting the account, but it does not prevent you from uploading or deleting blobs. A ReadOnly lock on a storage account prevents you from changing the account's configuration (SKU, firewall rules) and blocks the `listKeys` POST operation (because it returns secrets), but it does not prevent data-plane operations like blob uploads.
 
 Locks are `Microsoft.Authorization/locks@2020-05-01`, scoped to a resource group or a specific resource:
 
@@ -91,11 +91,13 @@ resource lock 'Microsoft.Authorization/locks@2020-05-01' = {
 
 The `scope` property attaches the lock to the resource group. To lock a specific resource, `scope: <resource-symbolic-name>`. Locks **inherit downward**: a lock on a resource group applies to every resource in the group, and a lock on a subscription applies to every resource group and resource in the subscription. A child resource cannot remove a parent lock. To delete a resource in a locked resource group, you must first remove the lock at the resource group level.
 
+To create or delete locks, you need `Microsoft.Authorization/*` or `Microsoft.Authorization/locks/*` actions. The Owner and User Access Administrator built-in roles have these permissions. Contributor does not.
+
 ### Subscriptions
 
 A **subscription** is the billing and administrative boundary. Every resource belongs to one subscription, and Azure bills by subscription. Subscriptions also define RBAC and Policy boundaries: a Policy assignment at subscription scope applies to every resource group and resource in that subscription, and a subscription-scoped role assignment grants access across the entire subscription.
 
-You can move resources between resource groups in the same subscription with `az resource move`. Moving resources between subscriptions is also possible, but not all resource types support it, and it may disrupt dependent services. The Azure portal and CLI validate move operations before execution. A move operation does not change the resource's location; it only changes which subscription and resource group the resource belongs to.
+You can move resources between resource groups in the same subscription with `az resource move`. Moving resources between subscriptions is also possible, but not all resource types support it, and both subscriptions must be in the same Microsoft Entra tenant. The move operation locks both source and target resource groups (you cannot create, delete, or update resources in those groups while the move is in progress; the lock can last up to four hours). The Azure portal and CLI validate move operations before execution. A move changes the resource's resource ID but not its location.
 
 **Subscription management** (changing spend limits, cancelling, viewing billing) is a portal and CLI task, not Bicep. You cannot deploy or modify subscription settings in a template. The course subscription is the personal MSA subscription recorded in `.lab-env.json` `expectedSubscriptionId`. The lab guard refuses a different subscription to prevent deploying into work accounts.
 
@@ -169,9 +171,9 @@ After deployment, the resource group exists with the tags. If you try to delete 
 
 ## Worked example: What a ReadOnly lock blocks
 
-A resource group contains a storage account with a ReadOnly lock. You can read the account's properties and list its containers in the portal. You can upload a blob to a container (data-plane operation). You try to change the account's SKU from Standard_LRS to Standard_GRS in the portal. Azure blocks the operation because the lock prevents configuration changes.
+A resource group contains a storage account with a ReadOnly lock. You can read the account's properties and list its containers in the portal. You can upload a blob to a container (data-plane operation). You try to change the account's SKU from Standard_LRS to Standard_GRS in the portal. Azure blocks the operation because the lock prevents configuration changes. If you try to list the account keys with `az storage account keys list`, Azure blocks it because that operation uses a POST request to the control plane (it returns secrets).
 
-If you try to delete a blob inside the account, that succeeds. The lock applies to the control plane (Azure Resource Manager operations on the storage account resource), not the data plane (blob operations). A ReadOnly lock on a VM prevents you from changing the VM size or starting or stopping it, but it does not prevent you from connecting to the VM and modifying files inside. Data-plane operations are not controlled by locks.
+If you try to delete a blob inside the account, that succeeds. The lock applies to the control plane (operations at `https://management.azure.com`), not the data plane (blob operations at the storage endpoint). A ReadOnly lock on a VM prevents you from starting or stopping it (those are POST operations), but it does not prevent you from connecting and modifying files inside.
 
 **The plausible wrong reading.** You might expect a ReadOnly lock on a storage account to make the account's data read-only, preventing blob uploads or deletions. That is not true. Locks apply to the control plane only. To restrict data-plane operations, use RBAC (covered in A04) or storage-account firewall rules (covered in A07 and A10).
 
@@ -180,12 +182,12 @@ If you try to delete a blob inside the account, that succeeds. The lock applies 
 | Confusion | What separates them |
 |-----------|---------------------|
 | Resource group location vs resource location | The resource group's `location` is metadata only: it controls where Azure stores the resource group's own metadata. It does not constrain the resources inside. You can deploy East US resources into a West US resource group. Each resource has its own `location` property. |
-| Tags on a resource group vs tags on resources | Tags on a resource group are independent of tags on the resources inside. Setting a tag on the resource group does not set it on the resources. To enforce tag inheritance, use Azure Policy. |
-| CanNotDelete lock vs ReadOnly lock | CanNotDelete allows updates but prevents deletion. ReadOnly prevents all writes (create, update, delete). Both apply to the control plane only. |
-| Control plane vs data plane | The control plane is Azure Resource Manager: creating, updating, and deleting resources. The data plane is operations on the resource's data: uploading blobs, writing to a database, connecting to a VM. Locks apply to the control plane only. |
-| Lock inheritance | A lock on a resource group applies to every resource in the group. A lock on a subscription applies to every resource group and resource in the subscription. A child cannot remove a parent lock. |
+| Tags on a resource group vs tags on resources | Tags on a resource group are independent of tags on the resources inside. Setting a tag on the resource group does not set it on the resources. To enforce tag inheritance, use the built-in Policy "Inherit a tag from the resource group". |
+| CanNotDelete lock vs ReadOnly lock | CanNotDelete allows updates but prevents deletion. ReadOnly prevents all writes (create, update, delete) and blocks operations like `listKeys` (POST requests that return secrets). Both apply to the control plane only. |
+| Control plane vs data plane | The control plane is operations at `https://management.azure.com`: creating, updating, deleting resources. The data plane is operations on the resource's data at service endpoints: uploading blobs, writing to a database. Locks apply to the control plane only. |
+| Lock inheritance | A lock on a resource group applies to every resource in the group. A lock on a subscription applies to every resource group and resource in the subscription. A child cannot remove a parent lock. To create or delete locks, you need Owner or User Access Administrator (Contributor cannot). |
 | Subscription vs management group | A subscription is the billing and administrative boundary. A management group is a container for subscriptions, used for Policy and RBAC inheritance. Policy and RBAC assigned at management-group scope apply to all subscriptions in that group. |
-| Moving resources between resource groups vs subscriptions | Moving within a subscription is straightforward (validation, then move). Moving between subscriptions is possible for some resource types but not all, and it may disrupt dependent services. Neither changes the resource's location. |
+| Moving resources between resource groups vs subscriptions | Moving within a subscription is straightforward (validation, then move). Moving between subscriptions is possible for some resource types but not all, and both subscriptions must be in the same Microsoft Entra tenant. The move locks both source and target resource groups (you cannot create, delete, or update resources in those groups; lock can last up to four hours). A move changes the resource's resource ID but not its location. |
 
 ## Official docs
 
@@ -229,11 +231,11 @@ These are reference, not the reading. The lesson is the reading; the links are w
 ## Takeaways
 
 - Resource groups are deployed at subscription scope and contain resources, but the resource group's location is metadata only and does not constrain the resources inside.
-- Tags on a resource group do not automatically apply to the resources inside; tag inheritance requires Azure Policy.
-- CanNotDelete locks allow updates but prevent deletion; ReadOnly locks prevent all writes (create, update, delete); both apply to the control plane only, not the data plane.
+- Tags on a resource group do not automatically apply to the resources inside; tag inheritance requires the built-in Policy "Inherit a tag from the resource group".
+- CanNotDelete locks allow updates but prevent deletion; ReadOnly locks prevent all writes and block operations like `listKeys`; both apply to the control plane only. To create or delete locks, you need Owner or User Access Administrator.
 - Locks inherit downward: a lock on a resource group applies to every resource in the group, and a lock on a subscription applies to every resource group and resource in the subscription.
 - Subscriptions are the billing and administrative boundary; management groups organize subscriptions into a hierarchy for Policy and RBAC inheritance.
-- Moving resources between resource groups or subscriptions does not change the resource's location.
+- Moving resources between resource groups or subscriptions changes the resource ID but not its location. Moving between subscriptions requires both subscriptions to be in the same Microsoft Entra tenant, and the move locks both source and target resource groups (up to four hours).
 
 ## Exercises
 
