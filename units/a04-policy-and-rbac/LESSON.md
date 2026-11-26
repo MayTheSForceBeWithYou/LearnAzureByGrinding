@@ -23,32 +23,9 @@ Policy definitions are JSON documents. Azure provides hundreds of built-in defin
 
 ### Policy assignments
 
-A policy assignment attaches a definition to a scope. You assign Policy at subscription, resource group, or management-group scope in Bicep:
+A policy assignment attaches a definition to a scope. You assign Policy at subscription, resource group, or management-group scope in Bicep. The `policyDefinitionId` is the full resource ID of the built-in or custom definition. Built-in definitions live at `/providers/Microsoft.Authorization/policyDefinitions/<guid>`. Custom definitions you deploy live at subscription or management-group scope.
 
-```bicep
-targetScope = 'subscription'
-
-resource policyAssignment 'Microsoft.Authorization/policyAssignments@2024-04-01' = {
-  name: 'allowed-locations'
-  properties: {
-    policyDefinitionId: '/providers/Microsoft.Authorization/policyDefinitions/e56962a6-4747-49cd-b67b-bf8b01975c4c'
-    displayName: 'Allowed locations'
-    description: 'This policy restricts resource locations to East US and West US'
-    parameters: {
-      listOfAllowedLocations: {
-        value: [
-          'eastus'
-          'westus'
-        ]
-      }
-    }
-  }
-}
-```
-
-The `policyDefinitionId` is the full resource ID of the built-in or custom definition. Built-in definitions live at `/providers/Microsoft.Authorization/policyDefinitions/<guid>`. Custom definitions you deploy live at subscription or management-group scope and have resource IDs like `/subscriptions/<id>/providers/Microsoft.Authorization/policyDefinitions/<name>`.
-
-Policy assignments inherit downward: a Policy assigned at subscription scope applies to every resource group and resource in the subscription. A Policy assigned at management-group scope applies to every subscription, resource group, and resource in that management group. This is the same inheritance model as locks and RBAC.
+Policy assignments inherit downward: a Policy assigned at subscription scope applies to every resource group and resource in the subscription. A Policy assigned at management-group scope applies to every subscription, resource group, and resource in that management group.
 
 ### Policy effects
 
@@ -56,9 +33,14 @@ A policy definition's `effect` controls what happens when a resource violates th
 
 - **Deny**: blocks the resource creation or update. The request fails with a Policy violation error.
 - **Audit**: logs the violation but allows the operation to proceed.
+- **Append**: adds fields to the resource during creation or update.
 - **AuditIfNotExists** and **DeployIfNotExists**: evaluate whether a related resource exists. AuditIfNotExists logs a violation if the related resource is missing. DeployIfNotExists creates the missing resource after the deployment succeeds.
-- **Modify**: alters create or update requests (for example, "set the minimum TLS version to 1.2"). The assignment requires a managed identity (portal and ARM require `identity` and `location` on the assignment). The identity also needs a role assignment covering the `roleDefinitionIds` the definition declares, or remediation and Modify operations fail.
+- **Modify**: alters create or update requests (for example, "set the minimum TLS version to 1.2"). The assignment requires a managed identity (portal and ARM require `identity` and `location` on the assignment). The identity needs a role assignment covering the `roleDefinitionIds` the definition declares, or remediation and Modify requests fail.
+- **DenyAction**: blocks specific data-plane actions (evaluated after the Resource Provider returns success).
+- **Manual**: marks resources for manual compliance review.
 - **Disabled**: the Policy is assigned but not evaluated.
+
+**Evaluation order**: Disabled, Append/Modify, Deny, Audit, Manual, AuditIfNotExists/DeployIfNotExists, then DenyAction.
 
 Deny and Audit are the most common. Deny blocks non-compliant resources at deployment. Audit allows them through but flags them. Modify and DeployIfNotExists assignments require a managed identity (`identity` and `location` on the assignment); the identity also needs role assignments covering the definition's `roleDefinitionIds`, or remediation fails. Existing non-compliant resources need a remediation task.
 
@@ -69,12 +51,12 @@ A custom Policy definition is a JSON document with `policyRule`, `parameters`, a
 ```bicep
 targetScope = 'subscription'
 
-resource customPolicy 'Microsoft.Authorization/policyDefinitions@2024-04-01' = {
+resource customPolicy 'Microsoft.Authorization/policyDefinitions@2023-04-01' = {
   name: 'sku-region-guard'
   properties: {
     displayName: 'Lab SKU and region guard'
     policyType: 'Custom'
-    mode: 'All'
+    mode: 'Indexed'
     parameters: {
       allowedLocations: { type: 'Array' }
       allowedSkus: { type: 'Array' }
@@ -83,10 +65,15 @@ resource customPolicy 'Microsoft.Authorization/policyDefinitions@2024-04-01' = {
       if: {
         anyOf: [
           {
-            not: {
-              field: 'location'
-              in: '[parameters(\'allowedLocations\')]'
-            }
+            allOf: [
+              { not: { field: 'location', equals: 'global' } }
+              {
+                not: {
+                  field: 'location'
+                  in: '[parameters(\'allowedLocations\')]'
+                }
+              }
+            ]
           }
           {
             allOf: [
@@ -107,7 +94,7 @@ resource customPolicy 'Microsoft.Authorization/policyDefinitions@2024-04-01' = {
 }
 ```
 
-This definition denies resources outside the allowed locations or storage accounts outside the allowed SKUs. After deploying the definition, you assign it with a policy assignment that passes parameter values. The course uses a custom definition for the lab SKU and region guard to prevent accidental deployments of costly SKUs.
+This definition uses `mode: 'Indexed'` and excludes `global` resources (like action groups) to avoid denying location-less or global-scoped resources. It denies Indexed resources outside the allowed locations or storage accounts outside the allowed SKUs. After deploying the definition, you assign it with a policy assignment that passes parameter values. The course uses a custom definition for the lab SKU and region guard to prevent accidental deployments of costly SKUs.
 
 ### Role-based access control (RBAC)
 
@@ -116,10 +103,10 @@ This definition denies resources outside the allowed locations or storage accoun
 Azure provides built-in roles:
 
 - **Owner**: full access, including managing RBAC assignments.
-- **Contributor**: full resource access, but `NotActions` exclude `Microsoft.Authorization/*/Write` and `*/Delete` (among others), so it cannot manage RBAC, Policy, or locks.
+- **Contributor**: full resource access, but `NotActions` exclude `Microsoft.Authorization/*/Delete`, `Microsoft.Authorization/*/Write`, `Microsoft.Authorization/elevateAccess/Action`, Blueprint assignments write/delete, `Microsoft.Compute/galleries/share/action`, Purview consents write/delete, `Microsoft.Resources/deploymentStacks/manageDenySetting/action`, and Subscription cancel/enable, so it cannot manage RBAC, Policy, or locks.
 - **Reader**: read-only access.
-- **User Access Administrator**: `*/read` and `Microsoft.Authorization/*`. Can read all resources and manage all Authorization (role assignments, role definitions, Policy assignments, locks). Broad delegation scope.
-- **Role Based Access Control Administrator**: `*/read` and `Microsoft.Authorization/roleAssignments/*`. Can read all resources but only manage role assignments. Narrower delegation; supports ABAC conditions to constrain which roles or principals it assigns.
+- **User Access Administrator**: `*/read`, `Microsoft.Authorization/*`, and `Microsoft.Support/*`. Can read all resources and manage all Authorization (role assignments, role definitions, Policy assignments, locks). Broad delegation scope.
+- **Role Based Access Control Administrator**: `*/read`, `Microsoft.Authorization/roleAssignments/write`, `Microsoft.Authorization/roleAssignments/delete`, and `Microsoft.Support/*`. Can read all resources but only manage role assignments. Narrower delegation; supports ABAC conditions to constrain which roles or principals it assigns.
 - Many resource-specific roles: **Storage Blob Data Contributor**, **Virtual Machine Contributor**, etc.
 
 RBAC is **additive**: the principal's effective permissions are the union of all role assignments at all scopes. Azure also supports **deny assignments** (explicit denials that override allow), created by Azure features such as Deployment Stacks (deny settings) and managed applications, not directly by users.
@@ -145,15 +132,15 @@ resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 }
 ```
 
-The `roleDefinitionId` is the full resource ID of the built-in role definition. Built-in role definitions are subscription-level resources; their IDs are `/subscriptions/<id>/providers/Microsoft.Authorization/roleDefinitions/<guid>`. The role GUID is fixed for each built-in role (Reader is always `acdd72a7-3385-48ef-bd42-f606fba81ae7`). The `name` is a GUID; use `guid()` to generate a deterministic GUID from the scope, principal, and role to make the assignment idempotent.
+The `roleDefinitionId` is the full resource ID of the built-in role definition. Built-in role definitions are tenant-wide; their IDs at resource-group or subscription scope use `subscriptionResourceId('Microsoft.Authorization/roleDefinitions', <guid>)`. At management-group scope, use `tenantResourceId('Microsoft.Authorization/roleDefinitions', <guid>)`. The role GUID is fixed for each built-in role (Reader is always `acdd72a7-3385-48ef-bd42-f606fba81ae7`). The `name` is a GUID; use `guid()` to generate a deterministic GUID from the scope, principal, and role to make the assignment idempotent. Set `principalType` (User, Group, or ServicePrincipal) to avoid deployment delays.
 
 Role assignments inherit downward: a role assignment at subscription scope grants access to every resource group and resource in the subscription. A role assignment at management-group scope grants access to every subscription in that management group. To grant access to a single resource, assign the role at that resource's scope (set `scope: <resource-symbolic-name>` on the role assignment).
 
 ### Interpreting access assignments
 
-The portal (IAM blade) and CLI (`az role assignment list`) show effective role assignments. When a deployment fails with "insufficient permissions," check the role assignments at the resource, resource group, subscription, and management-group levels. RBAC is additive, so look for any assignment that grants the needed permission. If none exists, request the role from an Owner or User Access Administrator at the appropriate scope.
+The portal (IAM blade) and CLI (`az role assignment list`) show effective role assignments. When a deployment fails with an `AuthorizationFailed` error, check the role assignments at the resource, resource group, subscription, and management-group levels. RBAC is additive, so look for any assignment that grants the needed permission. If none exists, request the role from an Owner or User Access Administrator at the appropriate scope.
 
-The CLI command `az role assignment list --assignee <principal-id>` shows all assignments for that principal. Add `--all` to include inherited assignments from groups. The output shows the role, scope, and principal. To interpret an access assignment, find the role definition GUID, then look up the role name and permissions in the official documentation or with `az role definition list --name <role-name>`.
+The CLI command `az role assignment list --assignee <principal-id>` shows all assignments for that principal. Add `--include-groups` to include assignments inherited from groups, and `--include-inherited` to include parent scopes (resource group, subscription, management group). The output shows the role, scope, and principal. To interpret an access assignment, find the role definition GUID, then look up the role name and permissions in the official documentation or with `az role definition list --name <role-name>`.
 
 ### Policy evaluation and timing
 
@@ -187,36 +174,45 @@ resource allowedLocations 'Microsoft.Authorization/policyAssignments@2024-04-01'
 }
 ```
 
-Deploy this at subscription scope with `az deployment sub create --location eastus --template-file main.bicep`. After deployment, any attempt to create a resource in a region outside East US or West US fails with a Policy violation error. Existing resources outside those regions are flagged as non-compliant but are not deleted.
+Deploy this at subscription scope with `az deployment sub create --location eastus --template-file main.bicep`. After deployment, any attempt to create an Indexed resource (tracked resources with locations) in a region outside East US or West US fails with a Policy violation error. The built-in Allowed locations Policy does not cover resource groups (a separate built-in does), `global` resources, or types without a location property. Existing resources outside those regions are flagged as non-compliant but are not deleted.
 
 **The plausible wrong reading.** You might expect the Policy to delete existing resources that violate the rule. That is not true. Deny policies block new deployments and updates, but they do not delete existing resources. To remediate existing resources, delete them manually or use a remediation task (available for DeployIfNotExists and Modify, not Deny).
 
-## Worked example: Assign Reader role at resource-group scope
+## Worked example: Assign Contributor role at resource scope
 
-A contractor needs read-only access to a development resource group. You will assign the Reader role at resource-group scope to the contractor's principal ID.
+A service principal deploys and manages a specific storage account but should not have access to other resources in the resource group. You will assign the Contributor role at the storage account's resource scope.
 
-The Reader role GUID is `acdd72a7-3385-48ef-bd42-f606fba81ae7`. Here is the assignment:
+The Contributor role GUID is `b24988ac-6180-42a0-ab88-20f7382dd24c`. Here is the assignment in a resource-group-scoped file:
 
 ```bicep
 targetScope = 'resourceGroup'
 
-@description('Principal ID of the contractor user or service principal')
-param contractorPrincipalId string
+@description('Principal ID of the service principal')
+param servicePrincipalId string
 
-var readerRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
+@description('Storage account name')
+param storageAccountName string
 
-resource readerAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, contractorPrincipalId, readerRoleId)
+var contributorRoleId = 'b24988ac-6180-42a0-ab88-20f7382dd24c'
+
+resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' existing = {
+  name: storageAccountName
+}
+
+resource contributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: storage
+  name: guid(storage.id, servicePrincipalId, contributorRoleId)
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', readerRoleId)
-    principalId: contractorPrincipalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
+    principalId: servicePrincipalId
+    principalType: 'ServicePrincipal'
   }
 }
 ```
 
-Deploy this at resource-group scope with `az deployment group create --resource-group dev-rg --template-file main.bicep --parameters contractorPrincipalId=<id>`. After deployment, the contractor can read resources in `dev-rg` but cannot modify them or access other resource groups (unless they have other role assignments).
+Deploy this at resource-group scope with `az deployment group create --resource-group my-rg --template-file main.bicep --parameters servicePrincipalId=<id> storageAccountName=<name>`. After deployment, the service principal can manage that storage account but cannot access other resources in the resource group.
 
-**The plausible wrong reading.** You might expect Reader to include some write permissions (starting or stopping a VM). That is not true. Reader is strictly read-only. To start or stop a VM, the principal needs Contributor or Virtual Machine Contributor.
+**The plausible wrong reading.** You might expect Contributor at resource scope to also grant access to child resources or related resources. That is not true. The scope is exactly the resource specified. If the storage account has a private endpoint in another resource group, the Contributor assignment on the storage account does not grant access to that private endpoint.
 
 ## Distinctions worth keeping straight
 
@@ -226,29 +222,27 @@ Deploy this at resource-group scope with `az deployment group create --resource-
 | Deny vs Audit | Deny blocks non-compliant resources at deployment. Audit allows them through but logs the violation. |
 | Modify vs DeployIfNotExists | Modify alters create/update requests. DeployIfNotExists creates a missing related resource after the deployment succeeds. Both assignments require a managed identity and role assignments. Existing non-compliant resources need remediation tasks. Deny and Audit do not. |
 | Role definition vs role assignment | A role definition is a set of permissions. A role assignment attaches the role to a principal at a scope. Without an assignment, the definition has no effect. |
-| Owner vs Contributor | Owner has full access including RBAC. Contributor's `NotActions` exclude `Microsoft.Authorization/*/Write` and `*/Delete`, so it cannot manage RBAC, Policy, or locks. |
+| Owner vs Contributor | Owner has full access including RBAC. Contributor's `NotActions` exclude `Microsoft.Authorization/*/Delete`, `Microsoft.Authorization/*/Write`, elevate access, Blueprint assignments, Compute galleries share, Purview consents, deployment stacks manage deny, and Subscription cancel/enable, so it cannot manage RBAC, Policy, or locks. |
 | User Access Administrator vs Role Based Access Control Administrator | UAA has `*/read` and `Microsoft.Authorization/*` (all Authorization: role assignments, definitions, Policy, locks). RBAC Administrator has `*/read` and only `Microsoft.Authorization/roleAssignments/*` (narrower). Neither writes non-Authorization resources. RBAC Administrator supports ABAC conditions to constrain delegation; Microsoft recommends it over UAA. |
 | Contributor vs Reader | Contributor has full resource access (create, update, delete). Reader is read-only. |
 | RBAC is additive (except deny assignments) | The principal's effective permissions are the union of all role assignments at all scopes. Azure deny assignments (created by Deployment Stacks, managed applications, and other Azure features, not directly by users) override allow. |
-| Scope inheritance | Policy assignments and role assignments inherit downward. A child scope cannot remove a parent assignment. |
+| Scope inheritance | Policy assignments and role assignments inherit downward. A child scope cannot remove a parent assignment. Policy exemptions and `notScopes` do exclude child scopes from evaluation. |
 
 ## Official docs
 
 These are reference, not the reading. The lesson is the reading; the links are where you go to confirm or go deeper.
 
-- [What is Azure Policy?](https://learn.microsoft.com/en-us/azure/governance/policy/overview) — Policy concepts
-- [Policy definition structure](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/definition-structure) — JSON schema, parameters, policyRule
-- [Understand Azure Policy effects](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/effects) — Deny, Audit, Modify, DeployIfNotExists
-- [Create a custom policy definition](https://learn.microsoft.com/en-us/azure/governance/policy/tutorials/create-custom-policy-definition) — custom Policy
-- [What is Azure RBAC?](https://learn.microsoft.com/en-us/azure/role-based-access-control/overview) — RBAC concepts and built-in roles
-- [Azure built-in roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles) — full list with GUIDs
-- [Understand scope for Azure RBAC](https://learn.microsoft.com/en-us/azure/role-based-access-control/scope-overview) — subscription, resource-group, resource scope
-- [Troubleshoot Azure RBAC](https://learn.microsoft.com/en-us/azure/role-based-access-control/troubleshooting) — diagnose permissions issues
-- [Microsoft.Authorization/policyDefinitions](https://learn.microsoft.com/en-us/azure/templates/microsoft.authorization/policydefinitions) — Bicep/ARM Policy definitions
-- [Microsoft.Authorization/policyAssignments](https://learn.microsoft.com/en-us/azure/templates/microsoft.authorization/policyassignments) — Bicep/ARM Policy assignments
-- [Microsoft.Authorization/roleAssignments](https://learn.microsoft.com/en-us/azure/templates/microsoft.authorization/roleassignments) — Bicep/ARM role assignments
-- [az policy](https://learn.microsoft.com/en-us/cli/azure/policy) — CLI commands for Policy
-- [az role assignment](https://learn.microsoft.com/en-us/cli/azure/role/assignment) — CLI commands for role assignments
+- [What is Azure Policy?](https://learn.microsoft.com/en-us/azure/governance/policy/overview)
+- [Policy definition structure](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/definition-structure)
+- [Understand Azure Policy effects](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/effects)
+- [What is Azure RBAC?](https://learn.microsoft.com/en-us/azure/role-based-access-control/overview)
+- [Azure built-in roles](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles)
+- [Troubleshoot Azure RBAC](https://learn.microsoft.com/en-us/azure/role-based-access-control/troubleshooting)
+- [Microsoft.Authorization/policyDefinitions](https://learn.microsoft.com/en-us/azure/templates/microsoft.authorization/policydefinitions)
+- [Microsoft.Authorization/policyAssignments](https://learn.microsoft.com/en-us/azure/templates/microsoft.authorization/policyassignments)
+- [Microsoft.Authorization/roleAssignments](https://learn.microsoft.com/en-us/azure/templates/microsoft.authorization/roleassignments)
+- [az policy](https://learn.microsoft.com/en-us/cli/azure/policy)
+- [az role assignment](https://learn.microsoft.com/en-us/cli/azure/role/assignment)
 
 ## Check yourself
 
@@ -278,7 +272,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 - Deny blocks non-compliant resources at deployment; Audit logs violations. Modify and DeployIfNotExists assignments require a managed identity (without it, creation fails); the identity also needs role assignments for the definition's `roleDefinitionIds` (without them, remediation fails). Existing non-compliant resources need remediation tasks.
 - Policy assignments and role assignments inherit downward: assigned at subscription scope, they apply to every resource group and resource in the subscription.
 - RBAC is additive: the principal's effective permissions are the union of all role assignments, except deny assignments (created by Deployment Stacks and other Azure features) override allow.
-- Owner has full access including RBAC; Contributor's `NotActions` exclude RBAC/Policy/locks; User Access Administrator has `*/read` and `Microsoft.Authorization/*` (all Authorization); Role Based Access Control Administrator has `*/read` and only `roleAssignments/*` (narrower, supports ABAC conditions); Reader is read-only.
+- Owner has full access including RBAC; Contributor's `NotActions` exclude Microsoft.Authorization write/delete, elevate access, Blueprint assignments, galleries share, Purview consents, deployment stacks deny, and Subscription actions; User Access Administrator has `*/read`, `Microsoft.Authorization/*`, and `Microsoft.Support/*`; Role Based Access Control Administrator has `*/read`, `roleAssignments/write`, `roleAssignments/delete`, and `Microsoft.Support/*` (narrower, supports ABAC conditions); Reader is read-only.
 - Policy is free for Azure resources; Arc-connected servers with machine configuration cost $6/server/month.
 
 ## Exercises
