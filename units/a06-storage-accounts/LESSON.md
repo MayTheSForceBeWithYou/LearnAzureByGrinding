@@ -64,18 +64,22 @@ The **secondary region** for GRS/RA-GRS/GZRS/RA-GZRS is determined by the primar
 
 You can change a storage account's redundancy in the portal (Storage account → Configuration → Redundancy dropdown, then save) or via CLI (`az storage account update --sku <new-sku>`). Some transitions are instant SKU changes; others require a **conversion** (a data migration that copies data to new infrastructure).
 
-**Moving to zone redundancy (LRS → ZRS or GZRS)** requires a conversion. According to the [redundancy migration guide](https://learn.microsoft.com/azure/storage/common/redundancy-migration), the table states: "Perform a conversion" for LRS → ZRS. A conversion is a live migration: Azure copies data from one datacenter to three availability zones (or from LRS to ZRS in the primary region for GZRS). The account remains online (no downtime), but the conversion can take hours or days depending on data size.
+The [redundancy migration guide](https://learn.microsoft.com/azure/storage/common/redundancy-migration) states two rules:
+
+> Add or remove geo-replication or read access to the secondary region.
+
+> Add or remove zone-redundancy by performing a conversion.
+
+**Adding or removing geo-replication or read access** is a live SKU change (instant). Examples: LRS → GRS, GRS → RA-GRS, RA-GRS → GRS, GRS → LRS, ZRS → GZRS, GZRS → RA-GZRS. The account starts or stops replicating to the secondary region. No conversion needed.
+
+**Adding or removing zone redundancy** requires a conversion. Examples: LRS → ZRS, ZRS → LRS, GRS → GZRS, GZRS → GRS. A conversion is a live migration: Azure copies data from one infrastructure configuration to another (for example, from one datacenter to three availability zones, or from three zones to one). The account remains online (no downtime), but the conversion can take hours or days depending on data size.
 
 There are two ways to initiate a conversion:
 
 - **Customer-initiated conversion**: You start the conversion in the portal, PowerShell, or Azure CLI. The conversion typically begins within 72 hours but can take longer due to resource availability and data volume. No support request needed. Available in most regions. See the [customer-initiated conversion section](https://learn.microsoft.com/azure/storage/common/redundancy-migration#customer-initiated-conversion).
-- **Manual migration**: Create a new ZRS or GZRS account, copy data with AzCopy or another tool, then delete the old account. Manual migration gives you full control over timing. Use this when customer-initiated conversion is unavailable or when you need a specific completion window.
+- **Manual migration**: Create a new account with the target redundancy, copy data with AzCopy or another tool, then delete the old account. Manual migration gives you full control over timing. Use this when customer-initiated conversion is unavailable or when you need a specific completion window.
 
-LRS → GZRS requires two steps in sequence: first change the SKU from LRS to GRS (a live SKU change, instant), then perform a conversion to GZRS (the ZRS conversion in the primary region). The guide notes: "After going from LRS to ZRS, you must wait at least 24 hours before going from ZRS to GZRS."
-
-**Adding geo-redundancy without zone-redundancy (LRS → GRS/RA-GRS, ZRS → GZRS/RA-GZRS)** is a live SKU change (instant). The account starts replicating to the secondary region.
-
-**Moving away from zone redundancy** requires a conversion. The table shows: ZRS → LRS is "Perform a conversion", and GZRS/RA-GZRS → LRS is "First, use the Portal, PowerShell, or CLI to switch to ZRS, then perform a conversion to LRS". Downgrades from zone redundancy are not instant SKU changes.
+Some transitions combine both rules. LRS → GZRS adds both geo-redundancy and zone redundancy. You can do this in two steps: first add geo-replication (LRS → GRS, a live SKU change), then add zone redundancy (GRS → GZRS, a conversion). After a redundancy change, wait at least 24 hours before the next change to allow replication or conversion to stabilize.
 
 See <https://learn.microsoft.com/azure/storage/common/redundancy-migration> for the complete table of supported transitions.
 
@@ -166,7 +170,7 @@ If the blob is not undeleted within 7 days, Azure permanently deletes it. Soft d
 | LRS vs ZRS | LRS: three synchronous copies in one datacenter. No protection against datacenter failure. ZRS: three synchronous copies across three availability zones in one region. Protects against datacenter failure, but not region failure. |
 | GRS vs RA-GRS | Both replicate to a secondary region (six total copies). GRS: the secondary endpoint is readable only after failover. RA-GRS: the secondary endpoint is always readable (even before failover). RA-GRS is useful for read-heavy workloads that tolerate stale data. |
 | GZRS vs RA-GZRS | Both are ZRS in the primary region plus LRS in the secondary. GZRS: the secondary endpoint is readable only after failover. RA-GZRS: the secondary endpoint is always readable. The highest redundancy and read availability. |
-| LRS→ZRS conversion vs LRS→GRS change | LRS→ZRS is a **conversion** (data is copied to new infrastructure; can take hours or days; no downtime). LRS→GRS is a live SKU change (instant; replication to the secondary starts immediately). |
+| Adding zone redundancy vs adding geo-replication | Adding or removing zone redundancy (LRS→ZRS, ZRS→LRS, GRS→GZRS, GZRS→GRS) requires a **conversion** (data is copied to new infrastructure; can take hours or days; no downtime). Adding or removing geo-replication or read access (LRS→GRS, GRS→RA-GRS, RA-GRS→GRS, GRS→LRS) is a live SKU change (instant). |
 | Customer-managed keys vs Microsoft-managed keys | Microsoft-managed keys: Azure controls the encryption key. No action required. Customer-managed keys: you store the key in Azure Key Vault, control rotation and revocation, and assign a managed identity to access it. CMK requires a key vault with soft delete and purge protection enabled. |
 | Infrastructure encryption vs service-level encryption | Service-level encryption: all data is encrypted once at the service level using 256-bit AES (always enabled). Infrastructure encryption: data is encrypted twice (once at the service level, once at the infrastructure level) with two separate keys. Infrastructure encryption is a creation-time-only setting and is recommended only when compliance requires double encryption. |
 | Blob soft delete vs container soft delete | Blob soft delete: individual blobs are retained after deletion for a retention period. Container soft delete: entire containers (and all their blobs) are retained after deletion. Both are configured via the `blobServices/default` child resource. Both incur storage costs for retained data. |
@@ -211,7 +215,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 ## Takeaways
 
 - Storage account SKU determines redundancy and performance. LRS (three copies in one datacenter) makes the account unavailable if the datacenter fails. ZRS (three copies across three zones) protects against datacenter failure. GRS/GZRS replicate to a secondary region (six copies total). RA-GRS and RA-GZRS make the secondary endpoint readable before failover.
-- LRS→ZRS requires a **conversion** (data is copied to new infrastructure; takes hours or days; no downtime). LRS→GRS is a live SKU change (instant). Moving away from zone redundancy (ZRS→LRS, GZRS→LRS) also requires a conversion. Customer-managed unplanned failover converts the account to LRS in the new primary region.
+- Adding or removing **geo-replication or read access** to the secondary region is a live SKU change (instant). Adding or removing **zone redundancy** requires a conversion (data is copied to new infrastructure; takes hours or days; no downtime). Customer-managed unplanned failover converts the account to LRS in the new primary region.
 - Customer-managed keys (CMK) store the encryption key in Azure Key Vault. You control rotation and revocation. CMK requires a managed identity (system-assigned or user-assigned), a key vault with soft delete and purge protection, and an RSA key (2048, 3072, or 4096 bits). Infrastructure encryption (double encryption) is a creation-time-only setting.
 - Blob soft delete and container soft delete retain deleted objects for a retention period (1–365 days). You can undelete them during that period. Soft delete does not prevent deletion or purge; it only delays permanent deletion.
 - Object replication asynchronously copies block blobs from a source account to a destination account. It requires blob versioning enabled on both accounts. Use it for latency minimization, disaster recovery, or prod/test isolation.
