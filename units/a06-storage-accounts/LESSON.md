@@ -28,7 +28,7 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: 'mystorageaccount'
   location: 'eastus'
   sku: {
-    name: 'Standard_GRS'
+    name: 'Standard_ZRS'
   }
   kind: 'StorageV2'
   properties: {
@@ -39,7 +39,9 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
 }
 ```
 
-**SKU** determines the redundancy and performance tier (Standard or Premium). **Kind** determines the service features the account supports. The most common kind is `StorageV2` (general-purpose v2), which supports all storage services (Blob, File, Queue, Table) and all blob access tiers (hot, cool, cold, archive). `BlockBlobStorage` is a premium kind for block blobs only (high throughput). `FileStorage` is a premium kind for Azure Files only.
+**SKU** determines the redundancy and performance tier (Standard or Premium). **Kind** determines the service features the account supports. The most common kind is `StorageV2` (general-purpose v2), which supports all storage services (Blob, File, Queue, Table) and all blob access tiers. `BlockBlobStorage` is a premium kind for block blobs only (high throughput). `FileStorage` is a premium kind for Azure Files only.
+
+General-purpose v2 accounts support a default **access tier** (hot or cool) set at the account level. Hot access tier has higher storage costs but lower data-access costs; cool access tier has lower storage costs but higher data-access costs. Individual blobs can override the account's default tier. The archive tier is blob-level only (not an account setting). Access tier is a billing optimization; it does not affect redundancy or encryption.
 
 Storage account names must be globally unique, 3–24 lowercase letters and numbers, and DNS-compliant. The account is billed separately from the objects inside; you pay for the account's redundancy, outbound data transfer, and operations. The `allowSharedKeyAccess` property controls whether shared key (access key) authentication is allowed; setting it to `false` requires Microsoft Entra authentication or SAS tokens (shared key authentication is covered in A07).
 
@@ -98,13 +100,17 @@ Infrastructure encryption is a creation-time-only setting. It does not affect pe
 
 **Container soft delete** protects blob containers from accidental deletion. When you delete a soft-deleted container, it is retained for the retention period, and you can recover it (with all its blobs).
 
-You enable soft delete settings in Bicep via the `blobServices/default` child resource under the storage account. Here is container soft delete:
+You enable soft delete settings in Bicep via the `blobServices/default` child resource under the storage account:
 
 ```bicep
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
   parent: storage
   name: 'default'
   properties: {
+    deleteRetentionPolicy: {
+      enabled: true
+      days: 7
+    }
     containerDeleteRetentionPolicy: {
       enabled: true
       days: 7
@@ -113,7 +119,7 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01'
 }
 ```
 
-The same `blobServices/default` resource also supports blob soft delete (`deleteRetentionPolicy`), blob versioning (`isVersioningEnabled`), and change feed (`isVersioningEnabled` must be true for change feed). Blob soft delete and container soft delete are independent settings. You can enable one, both, or neither. Soft delete incurs storage costs for the retained data. See <https://learn.microsoft.com/en-us/azure/storage/blobs/soft-delete-blob-overview>.
+The same `blobServices/default` resource also supports blob versioning (`isVersioningEnabled`) and change feed (which requires versioning enabled). Blob soft delete and container soft delete are independent settings. You can enable one, both, or neither. Soft delete incurs storage costs for the retained data. See <https://learn.microsoft.com/en-us/azure/storage/blobs/soft-delete-blob-overview>.
 
 ### Object replication
 

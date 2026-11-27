@@ -247,6 +247,26 @@ These are reference, not the reading. The lesson is the reading; the links are w
 - Azure RBAC role assignments to security groups work on Entra ID Free. The P1 feature is dynamic groups (rule-based membership), not RBAC assignments to groups.
 - Guest users (external users, B2B collaboration) are invited by email, sign in with their own credentials, and appear in your directory as user objects. The portal and CLI distinguish guests from member users.
 
+### Feature licensing summary
+
+Before working with P1 and P2 features, understand what each tier provides:
+
+| Feature | Entra ID Free | Entra ID P1 | Entra ID P2 |
+|---------|---------------|-------------|-------------|
+| Cloud users and assigned-membership groups | ✓ | ✓ | ✓ |
+| Guest user invitations (B2B) | ✓ | ✓ | ✓ |
+| Self-service password *change* (user knows current password) | ✓ | ✓ | ✓ |
+| Azure RBAC role assignments | ✓ | ✓ | ✓ |
+| Self-service password *reset* (password recovery) | | ✓ | ✓ |
+| Dynamic groups (rule-based membership) | | ✓ | ✓ |
+| Conditional Access policies | | ✓ | ✓ |
+| Privileged Identity Management (PIM) | | | ✓ |
+| Entra ID Protection (risk-based Conditional Access) | | | ✓ |
+
+Sources: <https://learn.microsoft.com/en-us/entra/identity/authentication/concept-sspr-licensing> (SSPR), <https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership> (dynamic groups), <https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview> (Conditional Access requires P1), <https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-configure> (PIM requires P2).
+
+**30-day trial**: Microsoft offers a free 30-day trial of Entra ID P1 and P2 (no credit card required as of 2026). After 30 days, P1/P2 features stop working, but Free-tier users and groups remain. Start the trial only in your test tenant, never in a work tenant. See <https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id>.
+
 ## Exercises
 
 | # | Folder | Tag | Size | What |
