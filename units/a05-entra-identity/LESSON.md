@@ -249,21 +249,19 @@ These are reference, not the reading. The lesson is the reading; the links are w
 
 ### Feature licensing summary
 
-Before working with P1 and P2 features, understand what each tier provides:
+Before working with P1 and P2 features, understand what each tier provides. Each row cites <https://learn.microsoft.com/entra/fundamentals/licensing> plus deeper feature-specific pages where available:
 
-| Feature | Entra ID Free | Entra ID P1 | Entra ID P2 |
-|---------|---------------|-------------|-------------|
-| Cloud users and assigned-membership groups | ✓ | ✓ | ✓ |
-| Guest user invitations (B2B) | ✓ | ✓ | ✓ |
-| Self-service password *change* (user knows current password) | ✓ | ✓ | ✓ |
-| Azure RBAC role assignments | ✓ | ✓ | ✓ |
-| Self-service password *reset* (password recovery) | | ✓ | ✓ |
-| Dynamic groups (rule-based membership) | | ✓ | ✓ |
-| Conditional Access policies | | ✓ | ✓ |
-| Privileged Identity Management (PIM) | | | ✓ |
-| Entra ID Protection (risk-based Conditional Access) | | | ✓ |
-
-Sources: <https://learn.microsoft.com/en-us/entra/identity/authentication/concept-sspr-licensing> (SSPR), <https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership> (dynamic groups), <https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview> (Conditional Access requires P1), <https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-configure> (PIM requires P2).
+| Feature | Entra ID Free | Entra ID P1 | Entra ID P2 | Source |
+|---------|---------------|-------------|-------------|--------|
+| Cloud users and assigned-membership groups | ✓ | ✓ | ✓ | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing) |
+| Guest user invitations (B2B) | ✓ | ✓ | ✓ | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing), [B2B](https://learn.microsoft.com/entra/external-id/what-is-b2b) |
+| Self-service password *change* (user knows current password) | ✓ | ✓ | ✓ | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing) |
+| Azure RBAC role assignments | ✓ | ✓ | ✓ | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing) (not an Entra P1 feature) |
+| Self-service password *reset* (password recovery) | | ✓ | ✓ | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing), [SSPR licensing](https://learn.microsoft.com/entra/identity/authentication/concept-sspr-licensing) |
+| Dynamic groups (rule-based membership) | | ✓ | ✓ | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing), [dynamic groups](https://learn.microsoft.com/entra/identity/users/groups-dynamic-membership) |
+| Conditional Access policies | | ✓ | ✓ | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing), [CA overview](https://learn.microsoft.com/entra/identity/conditional-access/overview) |
+| Privileged Identity Management (PIM) | | | ✓ | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing), [PIM](https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-configure) |
+| Entra ID Protection (risk-based Conditional Access) | | | ✓ | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing) |
 
 **30-day trial**: Microsoft offers a free 30-day trial of Entra ID P1 and P2 (no credit card required as of 2026). After 30 days, P1/P2 features stop working, but Free-tier users and groups remain. Start the trial only in your test tenant, never in a work tenant. See <https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id>.
 

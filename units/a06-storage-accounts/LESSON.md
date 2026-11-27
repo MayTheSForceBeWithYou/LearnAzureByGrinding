@@ -64,21 +64,22 @@ The **secondary region** for GRS/RA-GRS/GZRS/RA-GZRS is determined by the primar
 
 ### Changing redundancy
 
-You can change a storage account's redundancy in the portal (Storage account → Configuration → Redundancy dropdown, then save) or via CLI (`az storage account update --sku <new-sku>`). Some transitions are instant SKU changes; others are **migrations** or **conversions** that copy data to new infrastructure.
+You can change a storage account's redundancy in the portal (Storage account → Configuration → Redundancy dropdown, then save) or via CLI (`az storage account update --sku <new-sku>`). Some transitions are instant SKU changes; others require a **conversion** (a data migration that copies data to new infrastructure).
 
-**LRS → ZRS** is a **conversion** (also called a live migration). Azure copies the data from one datacenter to three availability zones. The account remains online (no downtime), but the conversion can take hours or days depending on the data size. Initiating a conversion is a support request or a CLI operation with `az storage account migration start`. The alternative is to perform a **manual migration**: create a new ZRS account, copy the data with AzCopy or another tool, then delete the old account. Manual migration has downtime but completes faster.
+**Moving to zone redundancy (LRS → ZRS or GZRS)** requires a conversion. According to the [redundancy migration guide](https://learn.microsoft.com/azure/storage/common/redundancy-migration), the table states: "Perform a conversion" for LRS → ZRS. A conversion is a live migration: Azure copies data from one datacenter to three availability zones (or from LRS to ZRS in the primary region for GZRS). The account remains online (no downtime), but the conversion can take hours or days depending on data size.
 
-**LRS → GRS/RA-GRS** is a live SKU change (instant). The account starts replicating to the secondary region. The secondary endpoint becomes available once the initial replication completes (this can take hours for large accounts, but the account is online).
+There are two ways to initiate a conversion:
 
-**LRS → GZRS/RA-GZRS** requires TWO steps: first use the portal/PowerShell/CLI to switch the SKU from LRS to GRS/RA-GRS (a live SKU change), then perform a conversion to GZRS/RA-GZRS (a ZRS conversion in the primary region). The two steps can be performed in any order, but both are required.
+- **Customer-initiated conversion**: You start the conversion in the portal, PowerShell, or Azure CLI. The conversion typically begins within 72 hours but can take longer due to resource availability and data volume. No support request needed. Available in most regions. See the [customer-initiated conversion section](https://learn.microsoft.com/azure/storage/common/redundancy-migration#customer-initiated-conversion).
+- **Manual migration**: Create a new ZRS or GZRS account, copy data with AzCopy or another tool, then delete the old account. Manual migration has downtime but completes faster and gives you full control over timing. Use this when customer-initiated conversion is unavailable or when you need a specific completion window.
 
-**ZRS → GZRS/RA-GZRS** is a live SKU change.
+LRS → GZRS requires two steps: first change the SKU from LRS to GRS (a live SKU change, instant), then perform a conversion to GZRS (the ZRS conversion in the primary region). The two steps can be performed in any order.
 
-**GRS/RA-GRS → GZRS/RA-GZRS** is a conversion (the primary region must convert from LRS to ZRS).
+**Adding geo-redundancy without zone-redundancy (LRS → GRS/RA-GRS, ZRS → GZRS/RA-GZRS)** is a live SKU change (instant). The account starts replicating to the secondary region.
 
-See <https://learn.microsoft.com/en-us/azure/storage/common/redundancy-migration> for the complete table of supported transitions.
+**Downgrading redundancy** (for example, GZRS → LRS) is a live SKU change, but you lose the redundancy immediately. Azure does not keep copies in multiple zones or regions after the downgrade.
 
-Downgrading (for example, GZRS → LRS) is a live SKU change, but you lose the redundancy immediately. Azure does not keep copies in multiple zones or regions after the downgrade.
+See <https://learn.microsoft.com/azure/storage/common/redundancy-migration> for the complete table of supported transitions.
 
 ### Customer-managed keys
 
