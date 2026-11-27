@@ -45,7 +45,9 @@ Resource-deployment scripts (A00–A04, A06–A16, and A17 non-Entra) must targe
 
 **Needs Entra ID P2 or Microsoft Entra ID Governance**:
 - Privileged Identity Management (PIM)
-- Entra ID Protection and risk-based Conditional Access
+
+**Needs Entra ID P2 (or Microsoft Entra Suite)**:
+- Entra ID Protection and risk-based Conditional Access. See <https://learn.microsoft.com/entra/id-protection/overview-identity-protection>.
 
 A05 teaches Free-tier tasks as the default path. P1 and P2 tasks are marked clearly as optional or `[EXPLAIN]`. Microsoft offers a one-month P1/P2 trial. It requires a credit card and, under the terms shown when you start it, automatically converts to a paid subscription unless you cancel during the trial. Read the terms when you click Start, set a reminder to cancel, and start it only in the test tenant. See <https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id>.
 
@@ -108,7 +110,7 @@ You configure SSPR in the portal (Entra ID → Password reset). Enabling SSPR fo
 
 ### Conditional Access
 
-**Conditional Access** is Entra ID's policy engine for enforcing access controls: "if this user signs in from this location or device, require MFA" or "block access from untrusted locations." Conditional Access requires Entra ID P1. Policies are configured in the portal (Entra ID → Security → Conditional Access). A common policy is "require multi-factor authentication for all users when signing in from outside the corporate network."
+**Conditional Access** is Entra ID's policy engine for enforcing access controls: "if this user signs in from this location or device, require MFA" or "block access from untrusted locations." Conditional Access requires Entra ID P1. Policies are configured in the portal (Entra ID → Conditional Access). A common policy is "require multi-factor authentication for all users when signing in from outside the corporate network."
 
 A05 teaches Conditional Access as an `[EXPLAIN]` or trial-based optional task. It is not part of the Free-tier default path.
 
@@ -138,7 +140,7 @@ This happens because Entra directory roles (such as Global Administrator) do not
 
 You have a security group `Engineering` in your Entra tenant. You want all members of `Engineering` to have Contributor access to a resource group `dev-rg`. Instead of assigning Contributor to each user individually, you assign it to the group once, and all current and future group members inherit the access.
 
-Here is the subscription-scoped module that assigns Contributor at resource-group scope to a group, using `--assignee-principal-type Group`:
+Here is the subscription-scoped module that assigns Contributor at resource-group scope to a group, using `principalType: 'Group'`:
 
 ```bicep
 targetScope = 'subscription'
@@ -221,8 +223,8 @@ These are reference, not the reading. The lesson is the reading; the links are w
 1. Elevate your access in the portal (Entra ID → Properties → Access management for Azure resources → toggle to Yes). This grants you the User Access Administrator role at the Azure `/` (root) scope. After elevation, assign yourself Owner or Contributor at subscription scope. Global Administrator in Entra ID does not automatically grant Azure RBAC permissions.
 2. Conditional Access, which requires Entra ID P1. Security defaults (available on every tenant, <https://learn.microsoft.com/entra/fundamentals/security-defaults>) also block legacy authentication, but you can't exempt users from them. A Conditional Access policy lets you include All users, exclude the break-glass accounts and the legacy service account, and block the legacy client apps (Exchange ActiveSync and Other clients). Service principals are not something you exclude here: calls made by service principals aren't blocked by Conditional Access policies scoped to users, and targeting service principals needs Conditional Access for workload identities, which requires Workload Identities Premium licences. See <https://learn.microsoft.com/entra/identity/conditional-access/policy-block-legacy-authentication> and <https://learn.microsoft.com/entra/identity/conditional-access/workload-identity>.
 3. One. Azure RBAC role assignments are recorded once per principal (the group's object ID), not once per member. All members of the group inherit Contributor access to the resource group. Adding or removing users from the group changes their effective permissions, but the number of role assignments stays the same.
-4. The user must register at least one authentication method before they can reset their password. The SSPR portal prompts the user to register methods (such as email, phone, or authenticator app) if none are registered. After registering, the user can verify their identity and reset the password. See <https://learn.microsoft.com/entra/identity/authentication/concept-sspr-howitworks>.
-5. Entra ID P2. Risk-based Conditional Access is an Entra ID Protection feature, which requires P2. Identity Protection detects sign-in and user risks (impossible travel, anonymous IP, leaked credentials, etc.) and can trigger automatic responses through Conditional Access policies. P1 includes Conditional Access but not risk detection. See <https://learn.microsoft.com/entra/id-protection/overview-identity-protection>.
+4. No. SSPR checks that the user has the required authentication methods registered. If they aren't, the user is advised to contact their administrator to reset the password. Methods must be registered before the user needs to reset. See <https://learn.microsoft.com/entra/identity/authentication/concept-sspr-howitworks>.
+5. Entra ID P2 (or Microsoft Entra Suite). Risk-based Conditional Access is an Entra ID Protection feature, which requires P2 or Microsoft Entra Suite. Identity Protection detects sign-in and user risks (impossible travel, anonymous IP, leaked credentials, etc.) and can trigger automatic responses through Conditional Access policies. P1 includes Conditional Access but not risk detection. See <https://learn.microsoft.com/entra/id-protection/overview-identity-protection>.
 
 </details>
 
@@ -230,7 +232,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 
 - All A05 hands-on work uses a separate disposable test tenant, never your work or personal Default Directory. The lab guard refuses to run unless the active tenant matches `.lab-env.json`'s `expectedEntraTenantId`.
 - Switch directories cleanly in the portal (Settings → Directories + subscriptions) and in the CLI (`az login --tenant <id>`, then confirm `az account show` reports the correct `tenantId`).
-- Entra ID Free includes: cloud users, assigned-membership security groups, guest invitations, and password change. P1 adds: dynamic groups, Conditional Access, and SSPR reset. P2 or Microsoft Entra ID Governance adds: PIM and Entra ID Protection.
+- Entra ID Free includes: cloud users, assigned-membership security groups, guest invitations, and password change. P1 adds: dynamic groups, Conditional Access, and SSPR reset. P2 or Microsoft Entra ID Governance adds PIM; Entra ID Protection needs P2 (or Microsoft Entra Suite).
 - Usage location (a two-letter country code) is required before you can assign a license that includes location-restricted services. Without it, license assignment fails.
 - Entra directory roles (Global Administrator, User Administrator) grant permissions in the Entra tenant. Azure RBAC roles (Owner, Contributor, Reader) grant permissions to Azure resources. A Global Administrator with no Azure RBAC assignments cannot create or manage Azure resources. Elevate access (User Access Administrator at `/`) bridges the two.
 - Azure RBAC role assignments to security groups work on Entra ID Free. The P1 feature is dynamic groups (rule-based membership), not RBAC assignments to groups.
@@ -250,7 +252,7 @@ Before working with P1 and P2 features, understand what each tier provides. Each
 | Dynamic groups (rule-based membership) | | ✓ | ✓ | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing), [dynamic groups](https://learn.microsoft.com/entra/identity/users/groups-dynamic-membership) |
 | Conditional Access policies | | ✓ | ✓ | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing), [CA overview](https://learn.microsoft.com/entra/identity/conditional-access/overview) |
 | Privileged Identity Management (PIM) | | | ✓ (or Microsoft Entra ID Governance) | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing), [PIM](https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-configure) |
-| Entra ID Protection (risk-based Conditional Access) | | | ✓ | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing) |
+| Entra ID Protection (risk-based Conditional Access) | | | ✓ (or Microsoft Entra Suite) | [licensing](https://learn.microsoft.com/entra/fundamentals/licensing), [ID Protection](https://learn.microsoft.com/entra/id-protection/overview-identity-protection) |
 
 **One-month trial**: Microsoft offers a one-month P1/P2 trial. It requires a credit card and, under the terms shown when you start it, automatically converts to a paid subscription unless you cancel during the trial. Read the terms when you click Start, set a reminder to cancel, and start it only in the test tenant. See <https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id>.
 

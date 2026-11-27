@@ -27,12 +27,12 @@ You declare a storage account in Bicep as `Microsoft.Storage/storageAccounts@202
 param location string = resourceGroup().location
 
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: 'lagbstexample'
+  name: 'lagbstpremium'
   location: location
   sku: {
-    name: 'Standard_ZRS'
+    name: 'Premium_ZRS'
   }
-  kind: 'StorageV2'
+  kind: 'BlockBlobStorage'
   properties: {
     supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
@@ -41,6 +41,8 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   }
 }
 ```
+
+This example shows a premium block blob storage account optimized for low-latency workloads. For most workloads, use general-purpose v2 (`StorageV2`) with a Standard SKU.
 
 **SKU** determines the redundancy and performance tier (Standard or Premium). **Kind** determines the service features the account supports. The most common kind is `StorageV2` (general-purpose v2), which supports all storage services (Blob, File, Queue, Table) and all blob access tiers. `BlockBlobStorage` is a premium kind for block blobs only (high throughput). `FileStorage` is a premium kind for Azure Files only.
 
@@ -84,7 +86,7 @@ There are two ways to initiate a conversion:
 - **Customer-initiated conversion**: You start the conversion in the portal, PowerShell, or Azure CLI. The conversion typically begins within 72 hours but can take longer due to resource availability and data volume. No support request needed. Available in most regions. See the [customer-initiated conversion section](https://learn.microsoft.com/azure/storage/common/redundancy-migration#customer-initiated-conversion).
 - **Manual migration**: Create a new account with the target redundancy, copy data with AzCopy or another tool, then delete the old account. Manual migration gives you full control over timing. Use this when customer-initiated conversion is unavailable or when you need a specific completion window.
 
-LRS → GZRS adds both geo-redundancy and zone redundancy. You can do this in two steps: first add geo-replication (LRS → GRS, a SKU change), then add zone redundancy (GRS → GZRS, a conversion). The 24-hour wait applies only after a zone-redundancy conversion; SKU changes do not require a wait.
+LRS → GZRS adds both geo-redundancy and zone redundancy. You can do this in two steps: first add geo-replication (LRS → GRS, a SKU change), then add zone redundancy (GRS → GZRS, a conversion). The 24-hour wait applies after a zone-redundancy conversion.
 
 See <https://learn.microsoft.com/azure/storage/common/redundancy-migration> for the complete table of supported transitions.
 
@@ -92,7 +94,7 @@ See <https://learn.microsoft.com/azure/storage/common/redundancy-migration> for 
 
 Azure Storage encrypts all data at rest by default using **Microsoft-managed keys**. You can instead use **customer-managed keys** (CMK) stored in Azure Key Vault or Azure Key Vault Managed HSM. With CMK, you control the encryption key: you can rotate it, revoke access, and audit its use.
 
-To configure CMK, you create an Azure Key Vault (with soft delete and purge protection enabled), create an RSA or RSA-HSM key in the key vault (2048, 3072, or 4096 bits), assign a **managed identity** to the storage account (a user-assigned identity is required when configuring CMK at account creation; a system-assigned identity can be used when adding CMK to an existing account), and grant that identity permissions on the key (`wrapKey`, `unwrapKey`, `get`). Azure Storage uses the key to wrap the account encryption key. The data remains encrypted at all times; switching from Microsoft-managed keys to customer-managed keys re-encrypts the account encryption key (the root key), not the data itself.
+To configure CMK, you create an Azure Key Vault (with soft delete and purge protection enabled), create an RSA or RSA-HSM key in the key vault (2048, 3072, or 4096 bits), assign a **managed identity** to the storage account, and grant that identity permissions on the key (`wrapKey`, `unwrapKey`, `get`). CMK requires a managed identity (user-assigned when configured at account creation; system-assigned or user-assigned for an existing account). Azure Storage uses the key to wrap the account encryption key. The data remains encrypted at all times; switching from Microsoft-managed keys to customer-managed keys re-encrypts the account encryption key (the root key), not the data itself.
 
 CMK applies to Blob Storage and Azure Files automatically. For Queue and Table storage, you must enable CMK support when you create the account (set `encryption.services.queue.keyType: 'Account'` and `encryption.services.table.keyType: 'Account'` in the template, or check the boxes in the portal at account creation). You cannot add CMK to Queue and Table on an existing account that was not created with this option. See <https://learn.microsoft.com/en-us/azure/storage/common/customer-managed-keys-overview>.
 
@@ -104,9 +106,9 @@ Infrastructure encryption does not affect performance noticeably, but it provide
 
 ### Blob soft delete and container soft delete
 
-**Blob soft delete** protects individual blobs from accidental deletion or overwrite. When you delete a soft-deleted blob, it is marked as deleted but retained for a specified retention period (for example, 7 days). During the retention period, you can undelete the blob. After the retention period expires, Azure permanently deletes it.
+**Blob soft delete** protects individual blobs from accidental deletion or overwrite. When you delete a blob with soft delete enabled, it is marked as deleted but retained for a specified retention period (for example, 7 days). During the retention period, you can undelete the blob. After the retention period expires, Azure permanently deletes it.
 
-**Container soft delete** protects blob containers from accidental deletion. When you delete a soft-deleted container, it is retained for the retention period, and you can recover it (with all its blobs).
+**Container soft delete** protects blob containers from accidental deletion. When you delete a container with container soft delete enabled, it is retained for the retention period, and you can recover it (with all its blobs).
 
 You enable soft delete settings in Bicep via the `blobServices/default` child resource under the storage account:
 
@@ -156,7 +158,7 @@ You write blobs at 10:00 AM. Last Sync Time shows 9:58 AM. The primary region be
 - **Data written between Last Sync Time (9:58 AM) and the outage (10:05 AM) is lost.** Any blobs written or updated after 9:58 AM are not in the secondary and cannot be recovered.
 - The account's redundancy changes. According to the [disaster recovery guidance](https://learn.microsoft.com/azure/storage/common/storage-disaster-recovery-guidance): "The new primary region is configured to be locally redundant (LRS) after the failover." You must manually change the SKU back to GRS (or another geo-redundant SKU) if you want geo-redundancy again.
 
-After a planned failover the regions swap and geo-redundancy continues. After an unplanned failover the account is LRS in the new primary, and you must reconfigure geo-redundancy to get a secondary back. See <https://learn.microsoft.com/azure/storage/common/storage-disaster-recovery-guidance>. **Microsoft-managed failover** (initiated by Microsoft during a large-scale disaster) follows the same Last Sync Time rules as unplanned failover. After any failover type completes, the old primary eventually becomes the new secondary when connectivity is restored, but this can take hours or days.
+After a planned failover the regions swap and geo-redundancy continues. After an unplanned failover the account is LRS in the new primary, and you must reconfigure geo-redundancy to get a secondary back. See <https://learn.microsoft.com/azure/storage/common/storage-disaster-recovery-guidance>. **Microsoft-managed failover** (initiated by Microsoft during a large-scale disaster) follows the same Last Sync Time rules as unplanned failover.
 
 **The plausible wrong reading.** You might expect that all data written to the primary before the outage is replicated to the secondary. That is not true. Only data written before Last Sync Time is guaranteed to be in the secondary. The replication lag determines how much data is at risk. You might also expect the account to remain GRS after an unplanned failover. That is not true: an unplanned failover converts the account to LRS, and you must manually restore geo-redundancy.
 
@@ -213,7 +215,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 2. LRS (locally redundant storage) in the new primary region. The disaster recovery guidance states: "The new primary region is configured to be locally redundant (LRS) after the failover." Geo-redundancy is lost. You must manually change the SKU back to GRS (or another geo-redundant SKU) if you want geo-redundancy again.
 3. Yes. Soft delete retains the blob for 7 days. On Friday, the blob is still within the retention period, so you can undelete it. If you wait until the following Tuesday (8 days later), the blob is permanently deleted.
 4. A **conversion** (also called a live migration). Azure copies the data from one datacenter to three availability zones. The account remains online (no downtime), but the conversion can take hours or days. The alternative is a manual migration (create a new ZRS account, copy data with AzCopy, delete the old account). An LRS→ZRS conversion is not a simple SKU property change; it is a data migration.
-5. They fail until access is restored. Azure Storage cannot decrypt the data without the customer-managed key. Read and write operations fail with errors indicating the key is unavailable. To restore access, reassign the role or re-enable the key. See <https://learn.microsoft.com/azure/storage/common/customer-managed-keys-overview> and <https://learn.microsoft.com/azure/key-vault/general/soft-delete-overview>.
+5. They fail until access is restored. Azure Storage cannot decrypt the data without the customer-managed key. Read and write operations fail with error code 403 (Forbidden). To restore access, reassign the role or re-enable the key. See <https://learn.microsoft.com/azure/storage/common/customer-managed-keys-overview>.
 
 </details>
 
