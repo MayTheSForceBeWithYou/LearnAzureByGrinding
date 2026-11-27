@@ -274,7 +274,7 @@ Before working with P1 and P2 features, understand what each tier provides. Each
 | 3 | e03-invite-guest-user | PORTAL | S | Invite an external guest |
 | 4 | e04-group-membership | PREDICT | S | Who is in the group? |
 | 5 | e05-licence-needs-usage-location | CLI | S | Assign a licence |
-| 6 | e06-sspr-ca-pim-tiers | EXPLAIN | S | What needs P1 or P2? |
+| 6 | e06-pick-the-cheapest-tier | EXPLAIN | S | Pick the cheapest tier |
 
 ## Drills
 
