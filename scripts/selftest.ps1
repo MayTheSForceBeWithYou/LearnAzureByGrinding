@@ -191,6 +191,33 @@ Add-Case 'manifest-errors-fail' {
         [IO.File]::WriteAllText($p, ([IO.File]::ReadAllText($p) -replace "'EXPLAIN'", "'EXPLAIN', 'SHINY'" -replace 'whole-file', 'middle'))
     }
 } 1 @("unknown tag 'SHINY'", "StudentRegion 'middle'") -VerifyArgs @('-NoPSRule')
+Add-Case 'cli-starter-fails-tests-declared' {
+    param($t)
+    Put $t 'cli-drill/starter' "$U/e08-cli-script"; Put $t 'cli-drill/solution' "$S/e08-cli-script"
+    foreach ($side in $U, $S) {
+        $p = Join-Path $t "$side/e08-cli-script/exercise.psd1"
+        $txt = [IO.File]::ReadAllText($p).Replace("Tags          = @('DRILL', 'CLI')", "Tags          = @('CLI')`n    StarterFailsTests = `$true")
+        [IO.File]::WriteAllText($p, $txt)
+    }
+} 0 @('scaffold OK: structural tests fail pending:', 'a99-e08-cli-script: all checks passed') -VerifyArgs @('-NoPSRule')
+Add-Case 'cli-starter-fails-tests-undeclared' {
+    param($t)
+    Put $t 'cli-drill/starter' "$U/e08-cli-script"; Put $t 'cli-drill/solution' "$S/e08-cli-script"
+    foreach ($side in $U, $S) {
+        $p = Join-Path $t "$side/e08-cli-script/exercise.psd1"
+        $txt = [IO.File]::ReadAllText($p).Replace("Tags          = @('DRILL', 'CLI')", "Tags          = @('CLI')")
+        [IO.File]::WriteAllText($p, $txt)
+    }
+} 1 @('shipped checks must pass for CLI') -VerifyArgs @('-NoPSRule')
+Add-Case 'cli-starter-fails-tests-wrong-tag' {
+    param($t)
+    Put $t 'explain/starter' "$U/e04-explain-output"; Put $t 'explain/solution' "$S/e04-explain-output"
+    foreach ($side in $U, $S) {
+        $p = Join-Path $t "$side/e04-explain-output/exercise.psd1"
+        $txt = [IO.File]::ReadAllText($p).Replace("Tags           = @('EXPLAIN')", "Tags           = @('EXPLAIN')`n    StarterFailsTests = `$true")
+        [IO.File]::WriteAllText($p, $txt)
+    }
+} 1 @('StarterFailsTests is only allowed on CLI') -VerifyArgs @('-NoPSRule')
 Add-Case 'only-filter-and-mirror' {
     param($t)
     Put $t 'explain/starter' "$U/e04-explain-output"; Put $t 'explain/solution' "$S/e04-explain-output"

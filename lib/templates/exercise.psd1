@@ -18,4 +18,7 @@
     ExpectDiagnostics = @()
     # Required ANSWER.md headings (exact lines). ANSWER.md must exist, be non-empty, and have text under each.
     AnswerHeadings    = @()
+    # CLI only: the empty starter fails its Pester tests until the student writes the commands
+    # (Nathan's fail-until-worked rule). The matching solution must pass. Omit on every other tag.
+    # StarterFailsTests   = $true
 }

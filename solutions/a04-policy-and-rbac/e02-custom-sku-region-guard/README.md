@@ -16,6 +16,7 @@ Write a small custom Policy definition and assignment that guards lab SKUs and r
 - Exclude `global` in the rule (same shape as the built-in Allowed locations deny: `field: 'location'` / `notEquals: 'global'`), so those subscription-scope global resources survive.
 - The assignment's `policyDefinitionId` is the custom definition, referenced with a resource id (the definition's `.id` or `subscriptionResourceId`), not a copied body.
 - Name the definition and the assignment `lagb-sku-region-guard` (`down.ps1` deletes those names).
+- Pin `Microsoft.Authorization/policyDefinitions@2021-06-01`. `2024-04-01` hits BCP081 on Bicep 0.49.2.
 
 ## Verify
 

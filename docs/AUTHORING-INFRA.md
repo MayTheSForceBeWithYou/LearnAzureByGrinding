@@ -124,13 +124,14 @@ Starter, solution, drill, and lesson-demo manifests share these keys (template:
 |---|---|---|
 | `Tags` | string[] | First tag is **primary** and picks the rule below. Words: `WRITE MODIFY DRILL BUG PREDICT WHATIF EXPLAIN LAB PORTAL CLI NO-LIVE`. `LAB`/`NO-LIVE` cannot be primary; drills are primary `DRILL` and never `LAB` |
 | `Entry` | string | Student-facing file: `.bicep`, ARM `.json`, or `.ps1` (CLI). Default `main.bicep` |
-| `Test` | string | Pester 5 harness. Default `main.tests.ps1`. Required for WRITE/MODIFY/DRILL, and BUG without `ExpectDiagnostics` |
+| `Test` | string | Pester 5 harness. Default `main.tests.ps1`. Required for WRITE/MODIFY/DRILL, BUG without `ExpectDiagnostics`, and CLI when `StarterFailsTests` is true |
 | `StudentRegion` | string | `below-marker` (default) / `above-marker` / `whole-file`: the part of `Entry` the student may edit |
 | `ExpectResources` | string[] | Resource types the compiled template must contain (the "symbol list"). Nested child resources and module deployments are flattened |
 | `ExpectOutputs` | string[] | Output names the template must declare |
 | `ExpectProperties` | hashtable[] | `@{ ResourceType; Path; Value }` or `Match` (regex) in place of `Value`. `Path` is dotted with `[n]` indexes (`properties.securityRules[0].properties.access`). Satisfied when any resource of that type matches. Values compare against compiled JSON, so a Bicep expression compiles to an ARM expression string. Strings compare case-insensitively; `$true` does not match `'true'` |
 | `ExpectDiagnostics` | string[] | BUG only: the exact set of lint rule ids and PSRule rule names the starter fails |
 | `AnswerHeadings` | string[] | Exact heading lines `ANSWER.md` must contain, each with text under it |
+| `StarterFailsTests` | bool | CLI only: the empty starter fails its Pester tests until the student writes the commands. The solution must pass. Omit on every other tag (including DRILL; drills already fail-until-worked). |
 
 Validation also requires: WRITE/DRILL template entries declare `ExpectResources` or
 `ExpectOutputs`; MODIFY template entries declare `ExpectProperties` (or resources/outputs); a WHATIF
@@ -220,7 +221,8 @@ SKIP makes the run fail (SPEC 8.5).
 |---|---|---|
 | WRITE, DRILL, MODIFY | compile; be lint- and PSRule-clean; have no `#disable-next-line` / `#disable-diagnostics`; still be missing part of its Expect* list; and **fail** Pester with an assertion (a crash is an exercise bug). Verdict: `scaffold OK: structural tests fail pending: …` | everything below |
 | BUG | compile; with `ExpectDiagnostics`, fail **exactly** that set of lint + PSRule rules (Pester may also fail); without it, be clean and fail Pester | everything below |
-| PREDICT, EXPLAIN, WHATIF, PORTAL, CLI | compile/parse; be clean; pass its shipped Pester test if any | everything below |
+| PREDICT, EXPLAIN, WHATIF, PORTAL | compile/parse; be clean; pass its shipped Pester test if any | everything below |
+| CLI | compile/parse; be clean. Without `StarterFailsTests`, pass shipped Pester if any. With `StarterFailsTests = $true`, **fail** Pester (scaffold OK: `structural tests fail pending: …`, counted, not skipped) | everything below |
 | any | manifest valid; no `OUTPUT-PENDING`; no `STALE` capture; NO-LIVE | compile; lint- and PSRule-clean; Expect* satisfied; Pester passes; `ANSWER.md` complete when `AnswerHeadings` is set; `NOTES.md` non-empty; harness byte-identical |
 
 **Harness fidelity.** Every starter file except `ANSWER.md` must exist in the solution and be
@@ -271,6 +273,7 @@ asserting exit code, required text, and an unchanged tree:
 | `bug-fails-exactly-expectdiagnostics` / `bug-wrong-expectdiagnostics-fails` | BUG passes on exactly `Azure.Storage.SecureTransfer`; a wrong list fails both ways |
 | `modify-expectproperties` | MODIFY pending on `sku.name = "Standard_LRS"`, solution passes |
 | `cli-drill-with-mocked-az` / `cli-drill-without-mock-is-no-live` | CLI drill against fixtures; unmocked `az` fails NO-LIVE |
+| `cli-starter-fails-tests-declared` / `cli-starter-fails-tests-undeclared` / `cli-starter-fails-tests-wrong-tag` | `[CLI]` starter with `StarterFailsTests` that fails Pester is scaffold-OK; the same starter without the key is rejected; a non-`[CLI]` tag that sets the key is rejected |
 | `explain-answer-pass` / `answer-missing-heading-fails` / `empty-answer-fails` | `ANSWER.md` grading |
 | `whatif-real-capture-passes` / `whatif-output-pending-and-stale-fail` | capture hash check, `OUTPUT-PENDING`, `STALE` |
 | `manifest-errors-fail` | unknown tag, bad `StudentRegion` |

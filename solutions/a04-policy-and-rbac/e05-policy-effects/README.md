@@ -2,7 +2,7 @@
 
 ## Goal
 
-Predict Deny, Audit, and Modify outcomes for the deployment described below. `main.bicep` is a neighbour: a resource-group-scope assignment of the built-in Allowed locations definition (`e56962a6-4747-49cd-b67b-bf8b01975c4c`) with `listOfAllowedLocations = ['eastus']`. Do not change it.
+Predict Deny, Audit, and Modify outcomes for the deployment described below. `main.bicep` is a neighbour: a resource-group-scope assignment of the built-in Allowed locations definition. That definition id is **tenant-level**: `/providers/Microsoft.Authorization/policyDefinitions/e56962a6-4747-49cd-b67b-bf8b01975c4c` (or `tenantResourceId('Microsoft.Authorization/policyDefinitions', 'e56962a6-4747-49cd-b67b-bf8b01975c4c')`). The assignment passes `listOfAllowedLocations = ['eastus']`. Do not change `main.bicep`.
 
 ## Premise
 

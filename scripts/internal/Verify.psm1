@@ -153,8 +153,19 @@ function Test-StarterItem {
                 if (-not $res.Problems.Count) { $res.Verdict = "bug OK: Pester fails on the defect ($(@($pr.FailedTests | ForEach-Object Name) -join '; '))" }
             }
         }
+        { $_ -eq 'CLI' -and $m.StarterFailsTests } {
+            # Same fail-until-worked rule as a CLI/PowerShell drill: the empty script parses,
+            # Pester fails, and verify-all reports the expected starter failure (not a skip).
+            if (-not $pr) { $res.Problems.Add('StarterFailsTests needs a Pester test that fails until the student writes the commands') }
+            elseif (@($pr.Crashes).Count) { $res.Problems.Add("starter harness crashed instead of failing an assertion: $(@($pr.Crashes)[0])") }
+            elseif ($pr.Failed -eq 0) { $res.Problems.Add('starter PASSES its tests; a CLI starter with StarterFailsTests must fail until the student does the work') }
+            if (-not $res.Problems.Count) {
+                $pending = @($pr.FailedTests | ForEach-Object Name)
+                $res.Verdict = "scaffold OK: structural tests fail pending: $($pending -join '; ')"
+            }
+        }
         default {
-            # PREDICT, EXPLAIN, WHATIF, PORTAL, CLI: shipped checks pass; the prose is the work.
+            # PREDICT, EXPLAIN, WHATIF, PORTAL, CLI (without StarterFailsTests): shipped checks pass.
             if ($diag) { foreach ($x in @($diag.Text)) { $res.Problems.Add("shipped file must be lint/PSRule clean: $x") } }
             if ($pr -and (@($pr.Crashes).Count -or $pr.Failed)) { $res.Problems.Add("shipped checks must pass for $($m.PrimaryTag): $(Format-Pester $pr)") }
             $ans = Join-Path $Dir 'ANSWER.md'

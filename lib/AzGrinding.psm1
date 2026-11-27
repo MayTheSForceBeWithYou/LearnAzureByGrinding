@@ -10,7 +10,7 @@ Set-StrictMode -Version 3.0
 
 $script:KnownTags = @('WRITE', 'MODIFY', 'DRILL', 'BUG', 'PREDICT', 'WHATIF', 'EXPLAIN', 'LAB', 'PORTAL', 'CLI', 'NO-LIVE')
 $script:KnownKeys = @('Tags', 'Entry', 'Test', 'StudentRegion', 'ExpectResources', 'ExpectOutputs',
-    'ExpectProperties', 'ExpectDiagnostics', 'AnswerHeadings')
+    'ExpectProperties', 'ExpectDiagnostics', 'AnswerHeadings', 'StarterFailsTests')
 $script:Regions = @('below-marker', 'above-marker', 'whole-file')
 $script:MarkerPattern = '---- Your .+ go(es)? below this line\. ----'
 
@@ -59,7 +59,7 @@ function Get-ExerciseManifest {
       Loads exercise.psd1 from -Path (a folder) and returns a hashtable with every v0.3 key
       present: Tags (string[]; Tags[0] is the primary tag), PrimaryTag, Entry, Test,
       StudentRegion, ExpectResources, ExpectOutputs, ExpectProperties, ExpectDiagnostics,
-      AnswerHeadings, plus Path and Raw (the keys as written).
+      AnswerHeadings, StarterFailsTests, plus Path and Raw (the keys as written).
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Path)
@@ -76,6 +76,7 @@ function Get-ExerciseManifest {
         $m[$k] = @(if ($raw.ContainsKey($k)) { $raw[$k] | Where-Object { $null -ne $_ } | ForEach-Object { [string]$_ } })
     }
     $m.ExpectProperties = @(if ($raw.ContainsKey('ExpectProperties')) { $raw.ExpectProperties | Where-Object { $_ } })
+    $m.StarterFailsTests = $raw.ContainsKey('StarterFailsTests') -and [bool]$raw.StarterFailsTests
     $m
 }
 
@@ -108,6 +109,13 @@ function Test-ExerciseManifest {
         $p.Add('MODIFY with a template entry needs ExpectProperties (or ExpectResources/ExpectOutputs)')
     }
     if ($m.ExpectDiagnostics.Count -and $m.PrimaryTag -ne 'BUG') { $p.Add('ExpectDiagnostics is only allowed on BUG') }
+    if ($m.Raw.ContainsKey('StarterFailsTests')) {
+        if ($m.PrimaryTag -ne 'CLI') { $p.Add('StarterFailsTests is only allowed on CLI') }
+        elseif ($m.Raw['StarterFailsTests'] -isnot [bool]) { $p.Add('StarterFailsTests must be $true or $false') }
+        elseif ($m.StarterFailsTests -and -not (Test-Path -LiteralPath $testPath -PathType Leaf)) {
+            $p.Add("StarterFailsTests needs Test '$($m.Test)' (the starter must fail it until the student writes the commands)")
+        }
+    }
     $i = 0
     foreach ($e in $m.ExpectProperties) {
         $i++

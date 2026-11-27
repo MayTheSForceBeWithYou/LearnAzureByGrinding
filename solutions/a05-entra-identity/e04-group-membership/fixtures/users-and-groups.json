@@ -1,0 +1,76 @@
+{
+  "note": "constructed from the documented Microsoft Graph user and group schema, not a live capture. All-zero GUIDs and lagb- names are obviously fake.",
+  "users": [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "displayName": "lagb-alex",
+      "userPrincipalName": "lagb-alex@lab.example",
+      "userType": "Member",
+      "department": "Engineering",
+      "jobTitle": "Builder"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "displayName": "lagb-blair",
+      "userPrincipalName": "lagb-blair@lab.example",
+      "userType": "Member",
+      "department": "Finance",
+      "jobTitle": "Analyst"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000003",
+      "displayName": "lagb-chris",
+      "userPrincipalName": "lagb-chris@lab.example",
+      "userType": "Member",
+      "department": "Engineering",
+      "jobTitle": "Reviewer"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000004",
+      "displayName": "lagb-dana",
+      "userPrincipalName": "lagb-dana@lab.example",
+      "userType": "Member",
+      "department": "Operations",
+      "jobTitle": "Coordinator"
+    }
+  ],
+  "groups": [
+    {
+      "id": "00000000-0000-0000-0000-000000000101",
+      "displayName": "lagb-engineers",
+      "securityEnabled": true,
+      "mailEnabled": false,
+      "groupTypes": [],
+      "membershipType": "assigned",
+      "members": [
+        "00000000-0000-0000-0000-000000000001",
+        "00000000-0000-0000-0000-000000000004"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000102",
+      "displayName": "lagb-finance",
+      "securityEnabled": true,
+      "mailEnabled": false,
+      "groupTypes": [],
+      "membershipType": "assigned",
+      "members": [
+        "00000000-0000-0000-0000-000000000002"
+      ]
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000103",
+      "displayName": "lagb-dept-engineering",
+      "securityEnabled": true,
+      "mailEnabled": false,
+      "groupTypes": [
+        "DynamicMembership"
+      ],
+      "membershipType": "dynamic",
+      "membershipRule": "(user.department -eq \"Engineering\")",
+      "membershipRuleProcessingState": "On",
+      "licence": "P1",
+      "members": []
+    }
+  ]
+}
