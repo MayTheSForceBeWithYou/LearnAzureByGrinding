@@ -226,9 +226,10 @@ function New-LabResourceGroup {
 
 function Start-LabDeployment {
     [CmdletBinding(SupportsShouldProcess)]
-    param([Parameter(Mandatory)][string]$ResourceGroup, [Parameter(Mandatory)][string]$TemplateFile, [string]$ParameterFile, [string]$Name = ('lagb-' + [datetime]::UtcNow.ToString('yyyyMMddHHmmss')))
+    param([Parameter(Mandatory)][string]$ResourceGroup, [Parameter(Mandatory)][string]$TemplateFile, [string]$ParameterFile, [string[]]$Parameters = @(), [string]$Name = ('lagb-' + [datetime]::UtcNow.ToString('yyyyMMddHHmmss')))
     $a = @('deployment', 'group', 'create', '--resource-group', $ResourceGroup, '--name', $Name, '--template-file', $TemplateFile)
     if ($ParameterFile) { $a += @('--parameters', $ParameterFile) }
+    if ($Parameters.Count) { $a += @('--parameters') + $Parameters }
     if ($PSCmdlet.ShouldProcess($ResourceGroup, "deploy $(Split-Path $TemplateFile -Leaf)")) { Invoke-LabAz -Arguments $a }
 }
 

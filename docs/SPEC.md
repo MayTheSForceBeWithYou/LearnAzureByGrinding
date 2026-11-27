@@ -473,7 +473,7 @@ still subject to the `expectedEntraTenantId` refusal in section 3.2.
 | `[WHATIF]` | predicts what-if change types (Create, Modify, Delete, NoChange, Ignore, …) before looking | Offline default: a checked-in what-if JSON fixture that is **real command output**. If the capture is not yet taken, the file must contain `OUTPUT-PENDING`, which fails verify-all and blocks merge. Never invent a payload. Live what-if, when used, is also tagged `[LAB]`, is never run in CI, and needs a login. |
 | `[EXPLAIN]` | writes a short, specific explanation in `ANSWER.md`; no required code change | The shipped file, if any, already compiles and its automated checks pass. The graded artefact is `ANSWER.md`. |
 | `[LAB]` | deploys to the learner subscription, then verifies with CLI or Pester post-deploy assertions, then tears down | Offline checks may already pass. The live deploy is **gated** (section 10) and **never part of CI**. `verify-all` only checks that the lab scripts and offline tests exist and that the starter/solution still satisfy the offline rules for their other tags. |
-| `[PORTAL]` / `[CLI]` | does a task that cannot honestly be graded from a template alone | Default verification is an **offline fixture** plus a script that CI runs against that fixture. Live portal steps, when present, are documented in the README and checked through `ANSWER.md` headings, not by CI logging into Azure. May combine with `[LAB]`. |
+| `[PORTAL]` / `[CLI]` | does a task that cannot honestly be graded from a template alone | Default verification is an **offline fixture** plus a script that CI runs against that fixture. Live portal steps, when present, are documented in the README and checked through `ANSWER.md` headings, not by CI logging into Azure. May combine with `[LAB]`. An exercise whose **primary tag** is `[CLI]` and whose work is the script itself may set `StarterFailsTests = $true` so the empty starter fails its Pester tests until the student writes the commands (Nathan's fail-until-worked rule, the same idea as a CLI/PowerShell drill); the matching solution must pass. Without that key, shipped `[CLI]` checks still pass. The key is rejected when `[CLI]` is only a modifier (not `Tags[0]`). |
 | `[NO-LIVE]` | (optional marker) this exercise must not call Azure, even if it looks live | **Implicit for every tag except `[LAB]`.** Use the marker on exercises that might look live (`[WHATIF]`, `[CLI]`) but must not call Azure. verify-all fails the exercise if its tests or scripts would call `az`, `Connect-AzAccount`, or ARM without a mock or fixture. `[LAB]` is the only tag that may require a login, and `[LAB]` is never run in CI. |
 
 `[PORTAL]` and `[CLI]` may appear together when either interface is acceptable.
@@ -1311,8 +1311,15 @@ Every exercise, drill, and solution directory has a small manifest:
     )                                   # [MODIFY]: the starter already has the type
     ExpectDiagnostics = @()             # [BUG]: exact lint or PSRule rule ids the starter may fail
     AnswerHeadings    = @()             # required ANSWER.md headings, if any
+    StarterFailsTests = $true           # primary tag [CLI] only: empty starter fails its Pester tests; solution must pass
 }
 ```
+
+`StarterFailsTests` is a boolean that only an exercise whose **primary tag** is `[CLI]` may
+set. When `$true`, the starter's Pester tests must fail (the commands are not there yet) and
+the solution's must pass (section 8.3). A starter that already passes with the key set is
+rejected, so the key cannot go stale. CLI/PowerShell drills do not use this key: they already
+fail-until-worked via `[DRILL]`. Starters that omit the key behave as they do today.
 
 The solution's `exercise.psd1` is byte-identical to the starter's (it is harness). Relative
 paths to `lib/` and the repo-root `bicepconfig.json` are resolved from the course root,
@@ -1452,6 +1459,14 @@ CI runs lint, selftest, verify-all (without `-RequireItems` until the first unit
 5. The verdict line reads `scaffold OK: structural tests fail pending: …` and names the
    missing types, properties, or commands.
 
+An exercise whose **primary tag** is `[CLI]` and that sets `StarterFailsTests = $true` uses
+this same scaffold-OK rule: the starter script parses, `Invoke-Pester` **fails** until the
+student writes the commands, and the row prints that verdict. A starter whose tests already
+pass is rejected (the key must not go stale). Without the key, a `[CLI]` starter's shipped
+tests must pass (section 4.3). The matching solution still must pass even with the key set
+(section 8.3). Starters with this key also get the WRITE/DRILL stop-line / suppression scan,
+and the lint/PSRule check when the entry is `.bicep`.
+
 ### 8.3 Solution pass rule
 
 1. `bicep build`, `bicep lint`, and (when enabled) PSRule pass on the solution.
@@ -1495,6 +1510,10 @@ verify row may say `offline only; live steps not run`. `[NO-LIVE]` is implicit e
 on `[LAB]`; tests or scripts that would call `az`, `Connect-AzAccount`, or ARM without
 a mock or fixture fail the exercise.
 
+A starter whose **primary tag** is `[CLI]` with `StarterFailsTests` whose Pester tests fail
+is an **expected starter failure**: verify-all prints a PASS row with the scaffold-OK
+verdict. It is not a SKIP, and it is not omitted from the counts.
+
 ### 8.6 Self-tests
 
 `selftest.ps1` builds a throwaway course tree and asserts: an untouched `[WRITE]` scaffold
@@ -1502,7 +1521,11 @@ is scaffold-OK; the same scaffold plus the missing resources passes; a dummy res
 sneaks past a weak test is rejected by the sample tests authors are expected to copy; a
 starter that fails to compile is reported as an exercise bug; harness edits in a solution
 fail fidelity; stray directories are SKIP; orphan solutions fail; lint and PSRule are
-invoked the same way CI will invoke them.
+invoked the same way CI will invoke them. For `StarterFailsTests`, it also asserts: a
+primary-tag `[CLI]` starter with the key that fails Pester is scaffold-OK; the same
+starter without the key is rejected; a non-primary `[CLI]` tag that sets the key is
+rejected; a starter with the key whose tests already pass is rejected; a solution that
+still fails with the key set is rejected.
 
 ## 9. Toolchain pins and portability
 
@@ -1912,6 +1935,15 @@ Resolutions of the exercise/drill review (Jack Gable) and the pedagogy review
 The short list is in the 0.3 changelog.
 
 ## 14. Changelog
+
+- 0.3.1 (26 November 2026): `[CLI]` script exercises may declare that the starter
+  fails its tests (Nathan's rule that exercises fail until worked). An exercise whose
+  **primary tag** is `[CLI]` may set `StarterFailsTests = $true` in `exercise.psd1`;
+  verify-all then treats a failing starter Pester run as scaffold-OK (reported, not
+  skipped) and still requires the solution to pass. A starter that already passes
+  with the key set is rejected (the key must not go stale). Without the key, shipped
+  `[CLI]` checks must pass, as before. A non-primary `[CLI]` tag that sets the key is
+  a manifest error.
 
 - 0.3 (21 November 2026): resolutions of the exercise/drill review (Jack Gable) and
   the pedagogy review (Monk), decided by Bruce as SPEC owner.
