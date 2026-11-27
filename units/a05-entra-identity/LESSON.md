@@ -245,18 +245,18 @@ These are reference, not the reading. The lesson is the reading; the links are w
 - Usage location (a two-letter country code) is required before you can assign a license that includes location-restricted services. Without it, license assignment fails.
 - Entra directory roles (Global Administrator, User Administrator) grant permissions in the Entra tenant. Azure RBAC roles (Owner, Contributor, Reader) grant permissions to Azure resources. A Global Administrator with no Azure RBAC assignments cannot create or manage Azure resources. Elevate access (User Access Administrator at `/`) bridges the two.
 - Azure RBAC role assignments to security groups work on Entra ID Free. The P1 feature is dynamic groups (rule-based membership), not RBAC assignments to groups.
-- Guest users (external users, B2B collaboration) are invited by email, sign in with their own credentials, and appear in your directory with `#EXT#` in their UPN and `UserType` set to `Guest`.
+- Guest users (external users, B2B collaboration) are invited by email, sign in with their own credentials, and appear in your directory as user objects. The portal and CLI distinguish guests from member users.
 
 ## Exercises
 
 | # | Folder | Tag | Size | What |
 |---|--------|-----|------|------|
-| 1 | e01-entra-vs-rbac | EXPLAIN | S | Entra directory roles vs Azure RBAC |
-| 2 | e02-create-user-and-group | CLI | S | `az ad user`/`group create` plus member add, mocked |
-| 3 | e03-invite-guest-user | PORTAL | S | B2B invite in the test tenant |
-| 4 | e04-group-membership | PREDICT | S | Users/groups fixture with one dynamic rule (P1, reasoning only) |
-| 5 | e05-licence-needs-usage-location | CLI | S | Graph via `az rest`, mocked |
-| 6 | e06-sspr-ca-pim-tiers | EXPLAIN | S | Free vs P1 vs P2, plus the trial warning |
+| 1 | e01-entra-vs-rbac | EXPLAIN | S | Entra roles are not Azure RBAC |
+| 2 | e02-create-user-and-group | CLI | S | Create a user and a security group |
+| 3 | e03-invite-guest-user | PORTAL | S | Invite an external guest |
+| 4 | e04-group-membership | PREDICT | S | Who is in the group? |
+| 5 | e05-licence-needs-usage-location | CLI | S | Assign a licence |
+| 6 | e06-sspr-ca-pim-tiers | EXPLAIN | S | What needs P1 or P2? |
 
 ## Drills
 

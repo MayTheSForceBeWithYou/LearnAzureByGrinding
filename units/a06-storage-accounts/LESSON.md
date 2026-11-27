@@ -28,19 +28,20 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: 'mystorageaccount'
   location: 'eastus'
   sku: {
-    name: 'Standard_LRS'
+    name: 'Standard_GRS'
   }
   kind: 'StorageV2'
   properties: {
     supportsHttpsTrafficOnly: true
     minimumTlsVersion: 'TLS1_2'
+    allowSharedKeyAccess: false
   }
 }
 ```
 
 **SKU** determines the redundancy and performance tier (Standard or Premium). **Kind** determines the service features the account supports. The most common kind is `StorageV2` (general-purpose v2), which supports all storage services (Blob, File, Queue, Table) and all blob access tiers (hot, cool, cold, archive). `BlockBlobStorage` is a premium kind for block blobs only (high throughput). `FileStorage` is a premium kind for Azure Files only.
 
-Storage account names must be globally unique, 3–24 lowercase letters and numbers, and DNS-compliant. The account is billed separately from the objects inside; you pay for the account's redundancy, outbound data transfer, and operations.
+Storage account names must be globally unique, 3–24 lowercase letters and numbers, and DNS-compliant. The account is billed separately from the objects inside; you pay for the account's redundancy, outbound data transfer, and operations. The `allowSharedKeyAccess` property controls whether shared key (access key) authentication is allowed; setting it to `false` requires Microsoft Entra authentication or SAS tokens (shared key authentication is covered in A07).
 
 ### Storage account SKUs and redundancy
 
@@ -63,13 +64,17 @@ The **secondary region** for GRS/RA-GRS/GZRS/RA-GZRS is determined by the primar
 
 You can change a storage account's redundancy in the portal (Storage account → Configuration → Redundancy dropdown, then save) or via CLI (`az storage account update --sku <new-sku>`). Some transitions are instant SKU changes; others are **migrations** or **conversions** that copy data to new infrastructure.
 
-**LRS → ZRS** is a **conversion** (also called a live migration). Azure copies the data from one datacenter to three availability zones. The account remains online (no downtime), but the conversion can take hours or days depending on the data size. Initiating a conversion is a support request or a CLI operation with `az storage account migration start`. The alternative is to perform a **manual migration**: create a new ZRS account, copy the data with AzCopy or another tool, then delete the old account. Manual migration has downtime but completes faster. See <https://learn.microsoft.com/en-us/azure/storage/common/redundancy-migration>.
+**LRS → ZRS** is a **conversion** (also called a live migration). Azure copies the data from one datacenter to three availability zones. The account remains online (no downtime), but the conversion can take hours or days depending on the data size. Initiating a conversion is a support request or a CLI operation with `az storage account migration start`. The alternative is to perform a **manual migration**: create a new ZRS account, copy the data with AzCopy or another tool, then delete the old account. Manual migration has downtime but completes faster.
 
-**LRS → GRS/RA-GRS/GZRS/RA-GZRS** is a live SKU change (instant). The account starts replicating to the secondary region. The secondary endpoint becomes available once the initial replication completes (this can take hours for large accounts, but the account is online).
+**LRS → GRS/RA-GRS** is a live SKU change (instant). The account starts replicating to the secondary region. The secondary endpoint becomes available once the initial replication completes (this can take hours for large accounts, but the account is online).
+
+**LRS → GZRS/RA-GZRS** requires TWO steps: first use the portal/PowerShell/CLI to switch the SKU from LRS to GRS/RA-GRS (a live SKU change), then perform a conversion to GZRS/RA-GZRS (a ZRS conversion in the primary region). The two steps can be performed in any order, but both are required.
 
 **ZRS → GZRS/RA-GZRS** is a live SKU change.
 
-**GRS/RA-GRS → GZRS/RA-GZRS** is a live SKU change, but the data in the primary region must first be converted from LRS to ZRS. This combination is a two-step process: request a conversion from LRS to ZRS in the primary, then change the SKU from GRS to GZRS.
+**GRS/RA-GRS → GZRS/RA-GZRS** is a conversion (the primary region must convert from LRS to ZRS).
+
+See <https://learn.microsoft.com/en-us/azure/storage/common/redundancy-migration> for the complete table of supported transitions.
 
 Downgrading (for example, GZRS → LRS) is a live SKU change, but you lose the redundancy immediately. Azure does not keep copies in multiple zones or regions after the downgrade.
 
@@ -77,17 +82,9 @@ Downgrading (for example, GZRS → LRS) is a live SKU change, but you lose the r
 
 Azure Storage encrypts all data at rest by default using **Microsoft-managed keys**. You can instead use **customer-managed keys** (CMK) stored in Azure Key Vault or Azure Key Vault Managed HSM. With CMK, you control the encryption key: you can rotate it, revoke access, and audit its use.
 
-To configure CMK:
+To configure CMK, you create an Azure Key Vault (with soft delete and purge protection enabled), create an RSA or RSA-HSM key in the key vault (2048, 3072, or 4096 bits), assign a **managed identity** to the storage account (a system-assigned identity created by Azure on the account, or a user-assigned identity you provision separately), and grant that identity permissions on the key (`wrapKey`, `unwrapKey`, `get`). Azure Storage uses the key to wrap the account encryption key. The data remains encrypted at all times; switching from Microsoft-managed keys to customer-managed keys re-encrypts the account encryption key (the root key), not the data itself.
 
-1. Create a **user-assigned managed identity** (or use a system-assigned managed identity on an existing account).
-2. Create an Azure Key Vault (or Managed HSM) with soft delete and purge protection enabled.
-3. Create an RSA or RSA-HSM key in the key vault (2048, 3072, or 4096 bits).
-4. Grant the managed identity **Key Vault Crypto Service Encryption User** role (or equivalent: `wrapKey`, `unwrapKey`, `get` permissions) on the key.
-5. Configure the storage account to use the managed identity and the key vault key URI.
-
-Azure Storage uses the key to wrap the account encryption key. The data remains encrypted at all times; switching from Microsoft-managed keys to customer-managed keys re-encrypts the account encryption key (the root key), not the data itself.
-
-CMK applies to Blob Storage and Azure Files automatically. For Queue and Table storage, you must enable CMK support when you create the account (set `encryption.services.queue.keyType: 'Account'` and `encryption.services.table.keyType: 'Account'` in the template, or check the boxes in the portal at account creation). You cannot add CMK to Queue and Table on an existing account that was not created with this option.
+CMK applies to Blob Storage and Azure Files automatically. For Queue and Table storage, you must enable CMK support when you create the account (set `encryption.services.queue.keyType: 'Account'` and `encryption.services.table.keyType: 'Account'` in the template, or check the boxes in the portal at account creation). You cannot add CMK to Queue and Table on an existing account that was not created with this option. See <https://learn.microsoft.com/en-us/azure/storage/common/customer-managed-keys-overview>.
 
 ### Infrastructure encryption
 
@@ -101,17 +98,13 @@ Infrastructure encryption is a creation-time-only setting. It does not affect pe
 
 **Container soft delete** protects blob containers from accidental deletion. When you delete a soft-deleted container, it is retained for the retention period, and you can recover it (with all its blobs).
 
-You enable soft delete in Bicep via the `blobServices/default` child resource under the storage account:
+You enable soft delete settings in Bicep via the `blobServices/default` child resource under the storage account. Here is container soft delete:
 
 ```bicep
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
   parent: storage
   name: 'default'
   properties: {
-    deleteRetentionPolicy: {
-      enabled: true
-      days: 7
-    }
     containerDeleteRetentionPolicy: {
       enabled: true
       days: 7
@@ -120,7 +113,7 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01'
 }
 ```
 
-Blob soft delete and container soft delete are independent settings. You can enable one, both, or neither. Soft delete incurs storage costs for the retained data. See <https://learn.microsoft.com/en-us/azure/storage/blobs/soft-delete-blob-overview>.
+The same `blobServices/default` resource also supports blob soft delete (`deleteRetentionPolicy`), blob versioning (`isVersioningEnabled`), and change feed (`isVersioningEnabled` must be true for change feed). Blob soft delete and container soft delete are independent settings. You can enable one, both, or neither. Soft delete incurs storage costs for the retained data. See <https://learn.microsoft.com/en-us/azure/storage/blobs/soft-delete-blob-overview>.
 
 ### Object replication
 
@@ -133,17 +126,19 @@ Object replication is useful for:
 
 Object replication policies are created in the portal (Storage account → Object replication) or via ARM/Bicep as `Microsoft.Storage/storageAccounts/objectReplicationPolicies`. The destination account must exist and must have versioning enabled before you create the policy on the source account. The lesson teaches object replication at the concept level; the hands-on exercise is optional or a lab.
 
-## Worked example: Secondary endpoint and read access
+## Worked example: Failover consequences and Last Sync Time
 
-You have a storage account with SKU `Standard_RA-GRS`. The primary region is East US, and Azure automatically pairs it with West US as the secondary region. The blob service endpoint is `https://mystorageaccount.blob.core.windows.net` (primary) and `https://mystorageaccount-secondary.blob.core.windows.net` (secondary).
+You have a storage account with SKU `Standard_GRS` in East US (primary), which Azure pairs with West US (secondary). The account has geo-redundant replication: data written to the primary is asynchronously replicated to the secondary. Azure exposes a **Last Sync Time** property (readable via the portal, CLI, or REST API) that shows when the secondary was last synchronized with the primary. Last Sync Time can lag behind the current time by seconds, minutes, or longer if the primary region is under heavy load or experiencing connectivity issues.
 
-You write a blob to the primary endpoint at `https://mystorageaccount.blob.core.windows.net/mycontainer/myblob`. Azure replicates it asynchronously to the secondary region. The replication typically completes in seconds or minutes, but it is not instantaneous. During the replication lag, the blob is not yet available at the secondary endpoint.
+You write blobs at 10:00 AM. Last Sync Time shows 9:58 AM. The primary region becomes unavailable at 10:05 AM. You initiate a **customer-managed failover** (a manual operation). Azure makes the secondary region (West US) the new primary. After failover completes:
 
-After replication completes, you can read the blob from the secondary endpoint: `https://mystorageaccount-secondary.blob.core.windows.net/mycontainer/myblob`. The secondary copy is **eventually consistent**: it may lag behind the primary by seconds or minutes. You cannot write to the secondary endpoint (write operations fail with HTTP 403). The secondary endpoint is read-only.
+- The account is now writable in West US. The blob endpoint `https://mystorageaccount.blob.core.windows.net` points to West US.
+- **Data written between Last Sync Time (9:58 AM) and the outage (10:05 AM) is lost.** Any blobs written or updated after 9:58 AM are not in the secondary and cannot be recovered.
+- The account's redundancy changes: a GRS account becomes LRS in the new primary region (West US). You must manually change the SKU back to GRS (or another geo-redundant SKU) if you want geo-redundancy again. See <https://learn.microsoft.com/en-us/azure/storage/common/storage-disaster-recovery-guidance>.
 
-If the primary region becomes unavailable, you can initiate a **failover** (manual or automatic, depending on your failover settings). After failover, the secondary region becomes the new primary (and writable), and the blob endpoint `https://mystorageaccount.blob.core.windows.net` now points to West US. The old primary (East US) becomes the new secondary (read-only after failover completes). Failover is a last-resort operation and can take minutes to hours.
+**Microsoft-managed failover** (initiated by Microsoft during a large-scale disaster) follows the same Last Sync Time rules. After either failover type completes, the old primary (East US) eventually becomes the new secondary when connectivity is restored, but this can take hours or days.
 
-**The plausible wrong reading.** You might expect the secondary endpoint to be always writable, or you might expect that replication is instantaneous. Neither is true. The secondary endpoint is read-only before failover. Replication is asynchronous and can lag by seconds or minutes. The `-secondary` suffix in the URL distinguishes the secondary endpoint. Without `RA-` in the SKU (for example, `Standard_GRS`), the secondary endpoint is not accessible until after failover.
+**The plausible wrong reading.** You might expect that all data written to the primary before the outage is replicated to the secondary. That is not true. Only data written before Last Sync Time is guaranteed to be in the secondary. The replication lag (the time between Last Sync Time and the current time) determines how much data is at risk. You might also expect the account to remain GRS after failover. That is not true: a customer-managed failover converts the account to LRS, and you must manually restore geo-redundancy.
 
 ## Worked example: Soft delete protects against accidental deletion, not malicious deletion
 
@@ -206,7 +201,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 
 - Storage account SKU determines redundancy and performance. LRS (three copies in one datacenter) has no datacenter-failure protection. ZRS (three copies across three zones) protects against datacenter failure. GRS/GZRS replicate to a secondary region (six copies total). RA-GRS and RA-GZRS make the secondary endpoint readable before failover.
 - LRS→ZRS is a **conversion** (data is copied to new infrastructure; takes hours or days; no downtime). LRS→GRS is a live SKU change (instant). Downgrading (GZRS→LRS) is a live SKU change, and you lose redundancy immediately.
-- Customer-managed keys (CMK) store the encryption key in Azure Key Vault. You control rotation and revocation. CMK requires a user-assigned or system-assigned managed identity, a key vault with soft delete and purge protection, and an RSA key (2048, 3072, or 4096 bits). Infrastructure encryption (double encryption) is a creation-time-only setting.
+- Customer-managed keys (CMK) store the encryption key in Azure Key Vault. You control rotation and revocation. CMK requires a managed identity (system-assigned or user-assigned), a key vault with soft delete and purge protection, and an RSA key (2048, 3072, or 4096 bits). Infrastructure encryption (double encryption) is a creation-time-only setting.
 - Blob soft delete and container soft delete retain deleted objects for a retention period (1–365 days). You can undelete them during that period. Soft delete does not prevent deletion or purge; it only delays permanent deletion.
 - Object replication asynchronously copies block blobs from a source account to a destination account. It requires blob versioning enabled on both accounts. Use it for latency minimization, disaster recovery, or prod/test isolation.
 - The secondary region for GRS/RA-GRS/GZRS/RA-GZRS is determined by Azure and cannot be changed. The secondary endpoint for blobs is `<account>-secondary.blob.core.windows.net`. Without `RA-` in the SKU, the secondary endpoint is not accessible until after failover.
@@ -215,12 +210,12 @@ These are reference, not the reading. The lesson is the reading; the links are w
 
 | # | Folder | Tag | Size | What |
 |---|--------|-----|------|------|
-| 1 | e01-storage-account-baseline | WRITE | S | Baseline storage account with chosen SKU, TLS 1.2, HTTPS only |
-| 2 | e02-choose-redundancy | PREDICT | S | Outage outcomes by SKU (LRS/ZRS/GRS/RA-GRS/GZRS) |
-| 3 | e03-upgrade-redundancy | MODIFY | S | Change an LRS account to GZRS (via conversion and SKU change) |
-| 4 | e04-customer-managed-key | WRITE | M | CMK with user-assigned identity, key vault key, and infrastructure encryption |
-| 5 | e05-insecure-storage-settings | BUG | S | Find and fix TLS 1.0 and public blob access issues |
-| 6 | e06-object-replication | WRITE, LAB | M | Object replication policy (optional live lab) |
+| 1 | e01-storage-account-baseline | WRITE | S | A secure storage account |
+| 2 | e02-choose-redundancy | PREDICT | S | What survives the outage? |
+| 3 | e03-upgrade-redundancy | MODIFY | S | Upgrade to geo-zone redundancy |
+| 4 | e04-customer-managed-key | WRITE | M | Encrypt with your own key |
+| 5 | e05-insecure-storage-settings | BUG | S | Find the insecure settings |
+| 6 | e06-object-replication | WRITE, LAB | M | Replicate blobs between accounts |
 
 ## Drills
 
