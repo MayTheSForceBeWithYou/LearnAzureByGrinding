@@ -63,21 +63,18 @@ A **work or school tenant** is an organization's Entra directory (for example, `
 
 A **user** in Entra ID is an identity that can sign in. Users have a **user principal name** (UPN, for example `alice@contoso.onmicrosoft.com`), an **object ID** (a GUID), and properties such as display name, mail, and usage location. Cloud users authenticate to Entra ID with their UPN and password. Synchronized users (synced from on-premises Active Directory via Microsoft Entra Connect) authenticate on-premises, and Entra ID trusts the synchronization.
 
-You create cloud users in the portal (Entra ID → Users → New user → Create new user) or via the CLI with `az ad user create`. Each user needs a UPN (which must be unique in the tenant), a display name, and a password (auto-generated or specified). The user's **usage location** (a two-letter country code, such as `US` or `GB`) is required before you can assign a license that includes location-restricted services. Without a usage location, license assignment fails.
+You create cloud users in the portal (Entra ID → Users → New user → Create new user) or via the Azure CLI. Each user needs a UPN (which must be unique in the tenant), a display name, and a password (auto-generated or specified). See the [az ad user](https://learn.microsoft.com/cli/azure/ad/user) reference for CLI operations.
 
 User properties you can set include:
 - Display name, given name, surname
 - Job title, department, company name, manager
-- Usage location (required for license assignment)
 - Contact information (email, mobile phone, office phone, street address)
-
-Guest users (covered below) have `#EXT#` in their UPN.
 
 ### Groups
 
-A **security group** contains users, devices, other groups, or service principals. You assign Azure RBAC roles and Entra directory roles to groups, and all members inherit the assignment. Security groups are created with **assigned membership** (you manually add each member) or **dynamic membership** (Entra ID evaluates a rule and automatically adds or removes members when their attributes change). Dynamic membership requires Entra ID P1.
+A **security group** contains users, devices, other groups, or service principals. You assign Azure RBAC roles and Entra directory roles to groups, and all members inherit the assignment. Security groups are created with **assigned membership** (you manually add each member) or **dynamic membership** (Entra ID evaluates a rule based on user or device attributes and automatically adds or removes members when those attributes change). Dynamic membership requires Entra ID P1.
 
-You create security groups in the portal (Entra ID → Groups → New group) or via the CLI with `az ad group create`. Each group needs a display name. After creation, you add members with the portal (Groups → <group> → Members → Add members) or via the CLI with `az ad group member add`.
+You create security groups in the portal (Entra ID → Groups → New group) or via the Azure CLI. Each group needs a display name. See the [az ad group](https://learn.microsoft.com/cli/azure/ad/group) reference for CLI operations.
 
 Nested groups (a group inside another group) are supported for security groups: you can add a security group as a member of another security group. Nested groups simplify RBAC and Conditional Access scope, but they do not inherit access to shared resources and applications assigned to the parent group.
 
@@ -85,17 +82,15 @@ Nested groups (a group inside another group) are supported for security groups: 
 
 ### External (guest) users
 
-**External users** (also called guest users or B2B collaboration users) are identities from outside your tenant who need access to your resources. You invite an external user by sending an invitation to their email address. The guest redeems the invitation, signs in with their own credentials (from their own Entra tenant, Microsoft account, Google, or another identity provider), and appears in your directory as a user object with `UserType` set to `Guest` and `#EXT#` in their UPN.
+**External users** (also called guest users or B2B collaboration users) are identities from outside your tenant who need access to your resources. You invite an external user by sending an invitation to their email address. The guest redeems the invitation, signs in with their own credentials (from their own Entra tenant, Microsoft account, Google, or another identity provider), and appears in your directory as a user object. The portal and CLI distinguish guests from member users.
 
-You invite guests in the portal (Entra ID → Users → New user → Invite external user) or via the CLI with `az ad user create --user-principal-name <email> --display-name <name> --user-type Guest`. The guest receives an email invitation. External users are common when you collaborate with business partners, contractors, or vendors who need access to your Azure resources or applications but do not have an account in your tenant.
+You invite guests in the portal (Entra ID → Users → New user → Invite external user) or via Microsoft Graph API (`POST /invitations`). The guest receives an email invitation. External users are common when you collaborate with business partners, contractors, or vendors who need access to your Azure resources or applications but do not have an account in your tenant.
 
 Guest users have restricted permissions by default: they cannot enumerate users or groups in your directory unless you grant them additional rights. See <https://learn.microsoft.com/en-us/entra/external-id/what-is-b2b>.
 
 ### Licenses and usage location
 
-Some Entra ID features and Microsoft 365 services require a license assigned to each user. Before you can assign a license that includes location-restricted services (such as Microsoft 365 or Entra ID P1/P2), you must set the user's **usage location** property to a valid two-letter country code (ISO 3166-1 alpha-2, for example `US`, `GB`, `DE`). Without a usage location, `az rest` or the portal license-assignment operation fails.
-
-You set the usage location in the portal (Entra ID → Users → <user> → Properties → Settings → Usage location) or via Microsoft Graph API with `az rest --method PATCH --uri 'https://graph.microsoft.com/v1.0/users/<user-id>' --headers 'Content-Type=application/json' --body '{"usageLocation":"<code>"}'`. After setting the usage location, you assign the license in the portal (Entra ID → Users → <user> → Licenses → Assignments → Add assignments) or via Graph with the `assignLicense` mutation.
+Some Entra ID features and Microsoft 365 services require a license assigned to each user. License assignment has prerequisites, including setting the user's **usage location** property to a valid two-letter country code (ISO 3166-1 alpha-2, for example `US`, `GB`, `DE`) when the license includes location-restricted services. The portal and Microsoft Graph API support both usage location configuration and license assignment. See <https://learn.microsoft.com/entra/fundamentals/licensing> and <https://learn.microsoft.com/graph/api/user-assignlicense>.
 
 ### Entra directory roles versus Azure RBAC roles
 
@@ -127,7 +122,7 @@ A05 teaches PIM as an `[EXPLAIN]` or trial-based optional task.
 
 ### Dynamic groups
 
-A **dynamic group** has a membership rule (a query based on user or device attributes, such as `user.department -eq "Engineering"`). Entra ID evaluates the rule and automatically adds or removes members when their attributes change. Dynamic groups require Entra ID P1. You create a dynamic group in the portal (Entra ID → Groups → New group → Membership type: Dynamic User or Dynamic Device → Add dynamic query). The rule syntax is documented at <https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership>.
+A **dynamic group** has a membership rule that queries user or device attributes. Entra ID evaluates the rule and automatically adds or removes members when their attributes change. Dynamic groups require Entra ID P1. You create a dynamic group in the portal (Entra ID → Groups → New group → Membership type: Dynamic User or Dynamic Device → Add dynamic query). The rule syntax is documented at <https://learn.microsoft.com/en-us/entra/identity/users/groups-dynamic-membership>.
 
 A05 teaches dynamic groups as a `[PREDICT]` exercise (given a fixture of users and a rule, predict the membership) rather than a hands-on creation task, because P1 is required.
 
@@ -183,18 +178,14 @@ resource contributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-
 
 Deploy this with `az deployment sub create --location eastus --template-file main.bicep --parameters rgName=dev-rg groupObjectId=<group-object-id>`. After deployment, all members of the `Engineering` group have Contributor access to `dev-rg`. Adding a new user to the group grants them access automatically; removing them revokes access automatically. Setting `principalType: 'Group'` avoids deployment delays caused by Azure's propagation checks for principal existence.
 
-**The plausible wrong reading.** You might expect that an Azure RBAC role assignment to a group is an Entra ID P1 feature. That is not true. Azure RBAC role assignments to groups work on Entra ID Free. The P1 feature is **dynamic groups** (groups whose membership is determined by a rule), not RBAC assignments to groups. You can assign RBAC roles to assigned-membership groups (manually managed) on Free.
+**The plausible wrong reading.** You might expect that an Azure RBAC role assignment to a group is an Entra ID P1 feature. That is not true. Azure RBAC role assignments to groups work on Entra ID Free. The P1 feature is **dynamic groups** (groups whose membership is determined by an attribute-based rule), not RBAC assignments to groups. You can assign RBAC roles to assigned-membership groups (manually managed) on Free.
 
 ## Distinctions worth keeping straight
 
 | Confusion | What separates them |
 |-----------|---------------------|
 | Entra directory roles vs Azure RBAC roles | Entra directory roles (Global Administrator, User Administrator) grant permissions in the Entra tenant: managing users, groups, directory settings. Azure RBAC roles (Owner, Contributor, Reader) grant permissions to Azure resources: subscriptions, resource groups, storage accounts. A Global Administrator with no Azure RBAC assignments cannot create or manage Azure resources. Elevation (User Access Administrator at `/`) bridges the two. |
-| Password change vs password reset | Password change: the user knows their current password and wants to change it (works on Entra ID Free). Password reset (SSPR): the user does not know their current password and needs to recover the account (requires Entra ID P1). |
-| Assigned membership vs dynamic membership | Assigned membership: you manually add each member to the group (works on Free). Dynamic membership: Entra ID evaluates a rule (such as `user.department -eq "Engineering"`) and automatically adds or removes members (requires P1). |
-| Cloud user vs guest user | Cloud user: a user created in your tenant, with a UPN ending in your tenant's domain (for example `alice@contoso.onmicrosoft.com`). Guest user: an external identity (from another Entra tenant, Microsoft account, Google, etc.) invited into your tenant, with `#EXT#` in their UPN and `UserType` set to `Guest`. |
-| Usage location | Required before you can assign a license that includes location-restricted services. Set via the portal (Properties → Settings → Usage location) or via Microsoft Graph API (`PATCH /users/{id}` with `usageLocation` property). Without it, license assignment fails. |
-| Entra ID Free vs P1 vs P2 | Free: cloud users, assigned groups, guest invitations, password change, Azure RBAC assignments. P1 adds: dynamic groups, Conditional Access, SSPR password reset, group-based licensing. P2 adds: PIM, Entra ID Protection, risk-based Conditional Access. |
+| Entra ID Free vs P1 vs P2 | Free: cloud users, assigned groups, guest invitations, Azure RBAC assignments. P1 adds: dynamic groups, Conditional Access, SSPR. P2 adds: PIM, Entra ID Protection. See the feature licensing table for details. |
 | Conditional Access vs MFA | Multi-factor authentication (MFA) is an authentication method: the user proves their identity with something they know (password) and something they have (phone, app, hardware token). Conditional Access is a policy engine that enforces MFA (and other controls, such as device compliance or location restrictions) based on sign-in conditions. Conditional Access requires P1; per-user MFA is available on Free but is less flexible. |
 | Elevate access | A manual action in the portal or via REST API that grants a Global Administrator the User Access Administrator role at the Azure `/` (root) scope. After elevation, the Global Administrator can assign Azure RBAC roles at subscription and resource-group scope. Elevation does not happen automatically. |
 | Nested groups | A security group can be a member of another security group. Nested groups simplify RBAC and Conditional Access scope, but they do not inherit access to shared resources and applications assigned to the parent group. Azure RBAC role assignments to a group apply to all members, including users in nested groups. |

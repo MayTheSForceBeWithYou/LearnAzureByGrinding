@@ -32,8 +32,6 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   }
   kind: 'StorageV2'
   properties: {
-    supportsHttpsTrafficOnly: true
-    minimumTlsVersion: 'TLS1_2'
     allowSharedKeyAccess: false
   }
 }
@@ -71,13 +69,13 @@ You can change a storage account's redundancy in the portal (Storage account →
 There are two ways to initiate a conversion:
 
 - **Customer-initiated conversion**: You start the conversion in the portal, PowerShell, or Azure CLI. The conversion typically begins within 72 hours but can take longer due to resource availability and data volume. No support request needed. Available in most regions. See the [customer-initiated conversion section](https://learn.microsoft.com/azure/storage/common/redundancy-migration#customer-initiated-conversion).
-- **Manual migration**: Create a new ZRS or GZRS account, copy data with AzCopy or another tool, then delete the old account. Manual migration has downtime but completes faster and gives you full control over timing. Use this when customer-initiated conversion is unavailable or when you need a specific completion window.
+- **Manual migration**: Create a new ZRS or GZRS account, copy data with AzCopy or another tool, then delete the old account. Manual migration gives you full control over timing. Use this when customer-initiated conversion is unavailable or when you need a specific completion window.
 
-LRS → GZRS requires two steps: first change the SKU from LRS to GRS (a live SKU change, instant), then perform a conversion to GZRS (the ZRS conversion in the primary region). The two steps can be performed in any order.
+LRS → GZRS requires two steps in sequence: first change the SKU from LRS to GRS (a live SKU change, instant), then perform a conversion to GZRS (the ZRS conversion in the primary region). The guide notes: "After going from LRS to ZRS, you must wait at least 24 hours before going from ZRS to GZRS."
 
 **Adding geo-redundancy without zone-redundancy (LRS → GRS/RA-GRS, ZRS → GZRS/RA-GZRS)** is a live SKU change (instant). The account starts replicating to the secondary region.
 
-**Downgrading redundancy** (for example, GZRS → LRS) is a live SKU change, but you lose the redundancy immediately. Azure does not keep copies in multiple zones or regions after the downgrade.
+**Moving away from zone redundancy** requires a conversion. The table shows: ZRS → LRS is "Perform a conversion", and GZRS/RA-GZRS → LRS is "First, use the Portal, PowerShell, or CLI to switch to ZRS, then perform a conversion to LRS". Downgrades from zone redundancy are not instant SKU changes.
 
 See <https://learn.microsoft.com/azure/storage/common/redundancy-migration> for the complete table of supported transitions.
 
@@ -91,9 +89,9 @@ CMK applies to Blob Storage and Azure Files automatically. For Queue and Table s
 
 ### Infrastructure encryption
 
-**Infrastructure encryption** (also called double encryption) encrypts data twice: once at the service level (with the account encryption key), and once at the infrastructure level (with a separate Microsoft-managed key). The two keys are independent. Infrastructure encryption is recommended when compliance requires double encryption. It is set at account creation by passing `requireInfrastructureEncryption: true` in the `encryption` property. You cannot enable it on an existing account. See <https://learn.microsoft.com/en-us/azure/storage/common/infrastructure-encryption-enable>.
+**Infrastructure encryption** (also called double encryption) encrypts data twice: once at the service level (with the account encryption key), and once at the infrastructure level (with a separate Microsoft-managed key). The two keys are independent. Infrastructure encryption is recommended when compliance requires double encryption. It is a creation-time-only setting: you configure it when you create the storage account, and you cannot enable it on an existing account. See <https://learn.microsoft.com/en-us/azure/storage/common/infrastructure-encryption-enable>.
 
-Infrastructure encryption is a creation-time-only setting. It does not affect performance noticeably, but it provides an additional layer of protection if one encryption algorithm or key is compromised.
+Infrastructure encryption does not affect performance noticeably, but it provides an additional layer of protection if one encryption algorithm or key is compromised.
 
 ### Blob soft delete and container soft delete
 
@@ -104,6 +102,12 @@ Infrastructure encryption is a creation-time-only setting. It does not affect pe
 You enable soft delete settings in Bicep via the `blobServices/default` child resource under the storage account:
 
 ```bicep
+param storageAccountName string
+
+resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
+  name: storageAccountName
+}
+
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
   parent: storage
   name: 'default'
@@ -137,23 +141,23 @@ Object replication policies are created in the portal (Storage account → Objec
 
 You have a storage account with SKU `Standard_GRS` in East US (primary), which Azure pairs with West US (secondary). The account has geo-redundant replication: data written to the primary is asynchronously replicated to the secondary. Azure exposes a **Last Sync Time** property (readable via the portal, CLI, or REST API) that shows when the secondary was last synchronized with the primary. Last Sync Time can lag behind the current time by seconds, minutes, or longer if the primary region is under heavy load or experiencing connectivity issues.
 
-You write blobs at 10:00 AM. Last Sync Time shows 9:58 AM. The primary region becomes unavailable at 10:05 AM. You initiate a **customer-managed failover** (a manual operation). Azure makes the secondary region (West US) the new primary. After failover completes:
+You write blobs at 10:00 AM. Last Sync Time shows 9:58 AM. The primary region becomes unavailable at 10:05 AM. You initiate a **customer-managed unplanned failover** (a manual operation). Azure makes the secondary region (West US) the new primary. After failover completes:
 
 - The account is now writable in West US. The blob endpoint `https://mystorageaccount.blob.core.windows.net` points to West US.
 - **Data written between Last Sync Time (9:58 AM) and the outage (10:05 AM) is lost.** Any blobs written or updated after 9:58 AM are not in the secondary and cannot be recovered.
-- The account's redundancy changes: a GRS account becomes LRS in the new primary region (West US). You must manually change the SKU back to GRS (or another geo-redundant SKU) if you want geo-redundancy again. See <https://learn.microsoft.com/en-us/azure/storage/common/storage-disaster-recovery-guidance>.
+- The account's redundancy changes. According to the [disaster recovery guidance](https://learn.microsoft.com/azure/storage/common/storage-disaster-recovery-guidance): "The new primary region is configured to be locally redundant (LRS) after the failover." You must manually change the SKU back to GRS (or another geo-redundant SKU) if you want geo-redundancy again.
 
-**Microsoft-managed failover** (initiated by Microsoft during a large-scale disaster) follows the same Last Sync Time rules. After either failover type completes, the old primary (East US) eventually becomes the new secondary when connectivity is restored, but this can take hours or days.
+**Customer-managed planned failover** (when both regions are available, for disaster recovery testing) retains geo-redundancy: the account remains GRS and the regions swap. **Microsoft-managed failover** (initiated by Microsoft during a large-scale disaster) follows the same Last Sync Time rules as unplanned failover. After any failover type completes, the old primary eventually becomes the new secondary when connectivity is restored, but this can take hours or days.
 
-**The plausible wrong reading.** You might expect that all data written to the primary before the outage is replicated to the secondary. That is not true. Only data written before Last Sync Time is guaranteed to be in the secondary. The replication lag (the time between Last Sync Time and the current time) determines how much data is at risk. You might also expect the account to remain GRS after failover. That is not true: a customer-managed failover converts the account to LRS, and you must manually restore geo-redundancy.
+**The plausible wrong reading.** You might expect that all data written to the primary before the outage is replicated to the secondary. That is not true. Only data written before Last Sync Time is guaranteed to be in the secondary. The replication lag determines how much data is at risk. You might also expect the account to remain GRS after an unplanned failover. That is not true: an unplanned failover converts the account to LRS, and you must manually restore geo-redundancy.
 
 ## Worked example: Soft delete protects against accidental deletion, not malicious deletion
 
 You enable blob soft delete with a 7-day retention period on a storage account. A user (or an automated script) with the Storage Blob Data Contributor role deletes a blob `report.pdf`. Azure marks the blob as deleted but retains it for 7 days. During those 7 days, an administrator can undelete `report.pdf` in the portal (Blob containers → <container> → Show deleted blobs → Undelete) or via the CLI with `az storage blob undelete`.
 
-If the blob is not undeleted within 7 days, Azure permanently deletes it. Soft delete does not protect against malicious deletion: an attacker with Storage Blob Data Contributor or higher access can delete blobs (or purge soft-deleted blobs) if they also have permission to manage soft delete policies. To protect against malicious or accidental administrative actions, use **immutable storage** (time-based retention policies or legal holds, taught in A08) or **RBAC least privilege** (grant only the minimum necessary roles).
+If the blob is not undeleted within 7 days, Azure permanently deletes it. Soft delete does not protect against malicious deletion: an attacker with Storage Blob Data Contributor or higher access can delete blobs. If the **Permanent Delete feature** is enabled on the account, a caller with appropriate permissions can permanently remove soft-deleted snapshots and versions before the retention period expires (see [soft delete overview](https://learn.microsoft.com/azure/storage/blobs/soft-delete-blob-overview)). To protect against malicious or accidental administrative actions, use **immutable storage** (time-based retention policies or legal holds, taught in A08) or **RBAC least privilege** (grant only the minimum necessary roles).
 
-**The plausible wrong reading.** You might expect soft delete to prevent all deletions, or to protect against purge operations. That is not true. Soft delete retains deleted blobs for the retention period, but it does not prevent deletion or purge. An administrator or user with sufficient permissions can still delete and purge blobs. To block deletion permanently for a specified period, use immutable storage with a time-based retention policy.
+**The plausible wrong reading.** You might expect soft delete to prevent all deletions, or that shortening the retention period purges existing soft-deleted blobs. Neither is true. Soft delete retains deleted blobs for the retention period, but it does not prevent deletion. Existing soft-deleted blobs remain until their original retention period expires; to purge them sooner, you must undelete them, turn off soft delete, and redelete them. To block deletion permanently for a specified period, use immutable storage with a time-based retention policy.
 
 ## Distinctions worth keeping straight
 
@@ -187,8 +191,8 @@ These are reference, not the reading. The lesson is the reading; the links are w
 
 ## Check yourself
 
-1. **A storage account has SKU `Standard_LRS`. An availability zone in the datacenter fails. What happens to the account?**
-2. **A storage account has SKU `Standard_RA-GRS`. The primary region (East US) becomes unavailable. Can you read blobs from the secondary endpoint?**
+1. **A storage account has GRS redundancy. The Last Sync Time property shows 2:45 PM. The primary region fails at 2:50 PM. You initiate a customer-managed unplanned failover. What happens to blobs written between 2:45 PM and 2:50 PM?**
+2. **After a customer-managed unplanned failover completes, what is the storage account's redundancy configuration?**
 3. **You enable blob soft delete with a 7-day retention period. You delete a blob on Monday. On Friday (5 days later), can you undelete it?**
 4. **You want to change a storage account's redundancy from LRS to ZRS. What operation does Azure perform?**
 5. **You configure customer-managed keys for a storage account. The key vault key is deleted (and purge protection is disabled, so the key is purged immediately). What happens to the blobs in the account?**
@@ -196,8 +200,8 @@ These are reference, not the reading. The lesson is the reading; the links are w
 <details>
 <summary>Answers</summary>
 
-1. The account becomes unavailable. LRS stores three synchronous copies in one datacenter. If that datacenter (or an availability zone within it, in regions that support zones) fails, all three copies are lost. LRS has no protection against datacenter failure. Use ZRS or GRS/GZRS for zone or region failure protection.
-2. Yes. RA-GRS (read-access geo-redundant storage) makes the secondary endpoint (`<account>-secondary.blob.core.windows.net`) readable at all times, even before failover. The data at the secondary may lag behind the primary (eventual consistency). Without `RA-` (for example, `Standard_GRS`), the secondary endpoint is readable only after failover.
+1. Those blobs are lost. Last Sync Time indicates the most recent time data from the primary was written to the secondary. Data written after Last Sync Time has not yet been copied to the secondary and is permanently lost when the primary becomes unavailable. The replication lag (5 minutes in this case) determines the amount of data loss.
+2. LRS (locally redundant storage) in the new primary region. The disaster recovery guidance states: "The new primary region is configured to be locally redundant (LRS) after the failover." Geo-redundancy is lost. You must manually change the SKU back to GRS (or another geo-redundant SKU) if you want geo-redundancy again.
 3. Yes. Soft delete retains the blob for 7 days. On Friday, the blob is still within the retention period, so you can undelete it. If you wait until the following Tuesday (8 days later), the blob is permanently deleted.
 4. A **conversion** (also called a live migration). Azure copies the data from one datacenter to three availability zones. The account remains online (no downtime), but the conversion can take hours or days. The alternative is a manual migration (create a new ZRS account, copy data with AzCopy, delete the old account). An LRS→ZRS conversion is not a simple SKU property change; it is a data migration.
 5. The blobs become inaccessible. Azure Storage cannot decrypt the data without the customer-managed key. Read and write operations fail with errors indicating the key is unavailable. To restore access, you must recover the key (if it is in the key vault's soft-deleted state) or restore it from a backup. If the key is permanently lost, the data is unrecoverable. This is why purge protection is required for key vaults used with customer-managed keys.
@@ -206,8 +210,8 @@ These are reference, not the reading. The lesson is the reading; the links are w
 
 ## Takeaways
 
-- Storage account SKU determines redundancy and performance. LRS (three copies in one datacenter) has no datacenter-failure protection. ZRS (three copies across three zones) protects against datacenter failure. GRS/GZRS replicate to a secondary region (six copies total). RA-GRS and RA-GZRS make the secondary endpoint readable before failover.
-- LRS→ZRS is a **conversion** (data is copied to new infrastructure; takes hours or days; no downtime). LRS→GRS is a live SKU change (instant). Downgrading (GZRS→LRS) is a live SKU change, and you lose redundancy immediately.
+- Storage account SKU determines redundancy and performance. LRS (three copies in one datacenter) makes the account unavailable if the datacenter fails. ZRS (three copies across three zones) protects against datacenter failure. GRS/GZRS replicate to a secondary region (six copies total). RA-GRS and RA-GZRS make the secondary endpoint readable before failover.
+- LRS→ZRS requires a **conversion** (data is copied to new infrastructure; takes hours or days; no downtime). LRS→GRS is a live SKU change (instant). Moving away from zone redundancy (ZRS→LRS, GZRS→LRS) also requires a conversion. Customer-managed unplanned failover converts the account to LRS in the new primary region.
 - Customer-managed keys (CMK) store the encryption key in Azure Key Vault. You control rotation and revocation. CMK requires a managed identity (system-assigned or user-assigned), a key vault with soft delete and purge protection, and an RSA key (2048, 3072, or 4096 bits). Infrastructure encryption (double encryption) is a creation-time-only setting.
 - Blob soft delete and container soft delete retain deleted objects for a retention period (1–365 days). You can undelete them during that period. Soft delete does not prevent deletion or purge; it only delays permanent deletion.
 - Object replication asynchronously copies block blobs from a source account to a destination account. It requires blob versioning enabled on both accounts. Use it for latency minimization, disaster recovery, or prod/test isolation.
