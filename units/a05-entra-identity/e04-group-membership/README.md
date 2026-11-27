@@ -12,7 +12,7 @@ Two groups are **assigned** membership (you add people by id). One group is **dy
 
 - `ANSWER.md` uses the required headings exactly, with text under each.
 - Under each group heading, list the member **display names** (and say `none` if empty). For the dynamic group, apply the rule to the four users; do not assume extra people exist.
-- Under **Why the dynamic group is P1**, cite the licensing sentence from the dynamic-membership page, and that a P1 trial belongs only in the A05 test tenant.
+- Under **Why the dynamic group is P1**, cite the licensing sentence from the dynamic-membership page, and that a P1 trial belongs only in the A05 test tenant. The one-month P1/P2 trial requires a credit card and, when the trial ends, automatically converts into a 12-month paid subscription unless you cancel during the trial; read the terms at Start, and start it only in the test tenant. Source: <https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id> (footnote on the one-month free trial).
 - You cannot manually add or remove members of a dynamic membership group (same Learn page, **Considerations**).
 - Do not invent Graph or portal output. Do not change the fixture.
 

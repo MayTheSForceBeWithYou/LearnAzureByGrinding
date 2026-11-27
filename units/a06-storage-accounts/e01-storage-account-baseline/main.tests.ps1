@@ -22,11 +22,17 @@ Describe 'a06-e01-storage-account-baseline' {
             @{ ResourceType = 'Microsoft.Storage/storageAccounts'; Path = 'properties.minimumTlsVersion'; Value = 'TLS1_2' }
             @{ ResourceType = 'Microsoft.Storage/storageAccounts'; Path = 'properties.allowBlobPublicAccess'; Value = $false }
             @{ ResourceType = 'Microsoft.Storage/storageAccounts'; Path = 'properties.allowSharedKeyAccess'; Value = $false }
-            @{ ResourceType = 'Microsoft.Storage/storageAccounts'; Path = 'tags.course'; Value = 'LearnAzureByGrinding' }
-            @{ ResourceType = 'Microsoft.Storage/storageAccounts'; Path = 'tags.unit'; Value = 'a06-storage-accounts' }
-            @{ ResourceType = 'Microsoft.Storage/storageAccounts'; Path = 'tags.exercise'; Match = '.' }
-            @{ ResourceType = 'Microsoft.Storage/storageAccounts'; Path = 'tags.owner'; Match = '.' }
-            @{ ResourceType = 'Microsoft.Storage/storageAccounts'; Path = 'tags.expires'; Match = '.' }
         ) | Should -BeNullOrEmpty
+        $tagParam = $template.parameters.tags
+        $tagParam | Should -Not -BeNullOrEmpty
+        $tagDefault = $tagParam.defaultValue
+        $tagDefault | Should -Not -BeNullOrEmpty
+        if ($tagDefault -is [System.Collections.IDictionary]) {
+            @($tagDefault.Keys | Where-Object { $_ -ieq 'course' }).Count | Should -Be 1
+        } else {
+            ($tagDefault | ConvertTo-Json -Compress) | Should -Match 'course'
+        }
+        $tagsJson = $st[0].Resource.tags | ConvertTo-Json -Depth 8 -Compress
+        $tagsJson | Should -Match "parameters\('tags'\)"
     }
 }

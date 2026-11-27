@@ -16,8 +16,8 @@ The identity needs wrap/unwrap/get on the key. With Key Vault RBAC that is the b
 
 - The compiled template contains `Microsoft.KeyVault/vaults`, `Microsoft.KeyVault/vaults/keys`, `Microsoft.ManagedIdentity/userAssignedIdentities`, `Microsoft.Authorization/roleAssignments`, and `Microsoft.Storage/storageAccounts`.
 - Key Vault: `enableRbacAuthorization` true, purge protection true, soft delete on (property or the platform default plus `softDeleteRetentionInDays`). Do not use access policies. Security L1 also includes `Azure.KeyVault.RBAC`, `Azure.KeyVault.AccessPolicy`, and `Azure.KeyVault.Logs` — send **AuditEvent** (or `audit` / `allLogs`) diagnostics to `logAnalyticsWorkspaceId`.
-- Role assignment: `name = guid(<key-vault-id>, <identity principalId>, <roleDefinitionId>)`, `principalType: 'ServicePrincipal'`. Do not hard-code a GUID; do not use `newGuid()`. Use the tenant-level role definition id, not `subscriptionResourceId`.
-- Storage: `encryption.keySource` `Microsoft.Keyvault`, identity is the user-assigned identity, `requireInfrastructureEncryption` true, `allowSharedKeyAccess` false, HTTPS, TLS 1.2, no public blobs, course tags, `lagb-` names.
+- Role assignment: `name = guid(<key-vault-id>, <identity resource id>, <roleDefinitionId>)` (the identity's `.id`, not `.properties.principalId` — that is BCP120 on Bicep 0.49.2), `principalType: 'ServicePrincipal'`. Do not hard-code a GUID; do not use `newGuid()`. Use the tenant-level role definition id, not `subscriptionResourceId`.
+- Storage: `encryption.keySource` `Microsoft.Keyvault`, identity is the user-assigned identity, `requireInfrastructureEncryption` true, `allowSharedKeyAccess` false, HTTPS, TLS 1.2, no public blobs, course tags, `lagb` prefix on storage and vault names (no hyphen; identity names may include hyphens).
 - Do not add a PSRule suppression.
 
 ## Verify
@@ -27,6 +27,6 @@ From this folder: `pwsh -File ../../../scripts/check.ps1`. That grades *your* wo
 <details>
 <summary>Hint</summary>
 
-Create the identity, the vault (`enableRbacAuthorization: true`, `enablePurgeProtection: true`), a key, then a role assignment of `e147488a-f6f5-4113-8e2d-b22465e65bf6` with `guid(vault.id, identity.properties.principalId, roleId)` and `principalType: 'ServicePrincipal'`. On the storage account set `identity.userAssignedIdentities`, `encryption.keySource: 'Microsoft.Keyvault'`, `encryption.identity.userAssignedIdentity`, `keyvaultproperties`, and `requireInfrastructureEncryption: true`.
+Create the identity, the vault (`enableRbacAuthorization: true`, `enablePurgeProtection: true`), a key, then a role assignment of `e147488a-f6f5-4113-8e2d-b22465e65bf6` with `guid(vault.id, identity.id, roleId)` and `principalType: 'ServicePrincipal'`. On the storage account set `identity.userAssignedIdentities`, `encryption.keySource: 'Microsoft.Keyvault'`, `encryption.identity.userAssignedIdentity`, `keyvaultproperties`, and `requireInfrastructureEncryption: true`.
 
 </details>

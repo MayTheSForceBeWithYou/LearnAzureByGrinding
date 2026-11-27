@@ -6,7 +6,7 @@ Author a storage account whose SKU, kind, and blob access tier come from paramet
 
 ## Rules
 
-Fresh copy via `scripts/rep.ps1`. No live Azure. No hints. `lagb-` name prefix. `allowSharedKeyAccess: false`, HTTPS, TLS 1.2, no public blobs. Bind `sku.name`, `kind`, and `properties.accessTier` to the parameters (do not hard-code those three).
+Fresh copy via `scripts/rep.ps1`. No live Azure. No hints. `lagb` name prefix (no hyphen: storage account names are letters and numbers only). `allowSharedKeyAccess: false`, HTTPS, TLS 1.2, no public blobs. Bind `sku.name`, `kind`, and `properties.accessTier` to the parameters (do not hard-code those three).
 
 ## Target
 

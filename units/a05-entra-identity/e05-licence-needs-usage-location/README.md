@@ -8,7 +8,7 @@ Fill in `Invoke-AssignLicence` so it sets `usageLocation` on a user, then assign
 
 A user must have a two-letter ISO 3166 `usageLocation` before you assign a licence (legal check for service availability). Graph documents `usageLocation` as required for licensed users: <https://learn.microsoft.com/graph/api/resources/user>. Then `POST /users/{id}/assignLicense` with `addLicenses` / `removeLicenses`: <https://learn.microsoft.com/graph/api/user-assignlicense>. Entra PowerShell says the same: set usage location, then assign. <https://learn.microsoft.com/powershell/module/microsoft.entra.users/set-entrauserlicense>
 
-P1 (or P2) licence assignment in this course is **trial-in-test-tenant** only. Do not assign paid P1/P2 in the personal Default Directory. Confirm which SKU includes P1 on <https://learn.microsoft.com/entra/fundamentals/licensing>.
+P1 (or P2) licence assignment in this course is **trial-in-test-tenant** only. The one-month P1/P2 trial requires a credit card and, when the trial ends, automatically converts into a 12-month paid subscription unless you cancel during the trial; read the terms at Start, and start it only in the test tenant. Do not assign paid P1/P2 in the personal Default Directory. Confirm which SKU includes P1 on <https://learn.microsoft.com/entra/fundamentals/licensing>. Source: <https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id> (footnote on the one-month free trial).
 
 ## Constraints
 

@@ -10,9 +10,9 @@ Object replication requires **blob versioning on both accounts** and **change fe
 
 ## Constraints
 
-- Two `Microsoft.Storage/storageAccounts` (`StorageV2`, `lagb-` names, course tags, HTTPS, TLS 1.2, `allowBlobPublicAccess` false, `allowSharedKeyAccess` false). Prefer `Standard_LRS`.
+- Two `Microsoft.Storage/storageAccounts` (`StorageV2`, `lagb` prefix with no hyphen in the account name, course tags from the `tags` parameter, HTTPS, TLS 1.2, `allowBlobPublicAccess` false, `allowSharedKeyAccess` false). Prefer `Standard_LRS`.
 - `blobServices/default` on both with `isVersioningEnabled: true`. Source also has `changeFeed.enabled: true` (a retention in days is allowed).
-- A container on each account, then `objectReplicationPolicies`: destination `name: 'default'` first; source `name` is the destination policy's policy id and each rule carries the destination `ruleId`.
+- A container on each account, then `objectReplicationPolicies`: destination `name: 'default'` first. The source-side policy name is the destination policyId, and each source rule carries the destination `ruleId`. A runtime property cannot be a resource `name` in the same file (BCP120); put the source-side policy in a module that receives those ids as parameters.
 - Full resource ids for `sourceAccount` / `destinationAccount` when cross-tenant replication is disallowed (Learn, same page).
 - Do not add a PSRule suppression.
 
@@ -22,15 +22,15 @@ From this folder: `pwsh -File ../../../scripts/check.ps1`. That grades *your* wo
 
 ## Lab
 
-Optional. **Cost class:** empty accounts in East US are effectively **$0** for a 1–2 hour lab. Capacity is billed per GB-month; an unused General Block Blob LRS account with no data stored has no capacity line.
+Optional. **Cost class:** empty accounts in East US are effectively **$0** for a 1–2 hour lab. Capacity is billed per GB-month; an unused StorageV2 Hot LRS account with no data stored has no capacity line.
 
 Retail Prices API query, run **27 November 2026** (UTC):
 
 ```
-https://prices.azure.com/api/retail/prices?$filter=serviceName eq 'Storage' and armRegionName eq 'eastus' and meterName eq 'LRS Data Stored' and skuName eq 'Standard LRS'
+https://prices.azure.com/api/retail/prices?$filter=productName eq 'Blob Storage' and meterName eq 'Hot LRS Data Stored' and armRegionName eq 'eastus'
 ```
 
-Result used: **General Block Blob**, sku **Standard LRS**, meter **LRS Data Stored**, **$0.024 / GB / Month**, currency USD, `armRegionName` eastus, `type` Consumption, `tierMinimumUnits` 0. Official page: <https://azure.microsoft.com/pricing/details/storage/blobs/>.
+Result used: **Blob Storage**, sku **Hot LRS**, meter **Hot LRS Data Stored**, **$0.0208 / GB / Month**, currency USD, `armRegionName` eastus, `type` Consumption, `tierMinimumUnits` 0 (the first paid GB at the 0-tier). Official page: <https://azure.microsoft.com/pricing/details/storage/blobs/>.
 
 Learn also says there is no cost to **configure** object replication (enabling change feed, versioning, and the policies); you pay transactions and egress when data actually replicates. Source: <https://learn.microsoft.com/azure/storage/blobs/object-replication-overview> (section **Estimated costs** / billing notes on that page).
 
@@ -43,6 +43,6 @@ Live deploy is `pwsh -File ../../../scripts/lab/lab-up.ps1 -Path .` after `.lab-
 <details>
 <summary>Hint</summary>
 
-Two accounts. Child `blobServices` named `default` with `isVersioningEnabled: true`; source `changeFeed: { enabled: true, retentionInDays: 7 }`. Child containers. Destination `objectReplicationPolicies` named `default` with a rule (empty `ruleId`). Source policy named `destPolicy.properties.policyId` with that rule's `ruleId`.
+Two accounts. Child `blobServices` named `default` with `isVersioningEnabled: true`; source `changeFeed: { enabled: true, retentionInDays: 7 }`. Child containers. Destination `objectReplicationPolicies` named `default` with a rule (empty `ruleId`). Put the source-side policy in a module that receives the destination policyId and ruleId as parameters.
 
 </details>

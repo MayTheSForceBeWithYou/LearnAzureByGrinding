@@ -11,7 +11,9 @@ Verify every tier claim on Learn before you write it. Start here, then follow th
 - Dynamic membership groups: <https://learn.microsoft.com/entra/identity/users/groups-dynamic-membership>
 - PIM getting started (licence prerequisite): <https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-getting-started>
 
-P1/P2 items in this course are **trial-in-test-tenant** (or EXPLAIN). Start a trial only in the disposable A05 tenant, never in a work tenant and never on the personal MSA Default Directory.
+The general Entra licensing page lists SSPR under Free, but password reset for cloud users needs P1 per the SSPR licensing page; these scenarios follow that specific page.
+
+P1/P2 items in this course are **trial-in-test-tenant** (or EXPLAIN). The one-month P1/P2 trial requires a credit card and, when the trial ends, automatically converts into a 12-month paid subscription unless you cancel during the trial; read the terms at Start, and start it only in the test tenant. Never in a work tenant and never on the personal MSA Default Directory. Source: <https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id> (footnote on the one-month free trial).
 
 ## Scenarios
 
@@ -25,7 +27,7 @@ P1/P2 items in this course are **trial-in-test-tenant** (or EXPLAIN). Start a tr
 - `ANSWER.md` uses the required headings exactly, with text under each.
 - Under **Cheapest tier**, write exactly `Free`, `P1`, or `P2` (the minimum that covers the requirement).
 - Under **Why**, name the feature (SSPR reset, SSPR change, dynamic groups, PIM) and cite the Learn page you used.
-- Under **Trial caveat for the test tenant**, say whether this requirement stays on Free, or needs a P1/P2 trial in the **test tenant**, and what you must check about the 30-day trial converting to a paid subscription. Microsoft's Entra ID product page describes a short P1/P2 trial that requires a payment method and, in the terms shown there, can automatically convert unless it is canceled during the trial. Read the terms at the moment you would click Start. Source: <https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id> and SPEC 3.2.
+- Under **Trial caveat for the test tenant**, say whether this requirement stays on Free, or needs a P1/P2 trial in the **test tenant**. The one-month P1/P2 trial requires a credit card and, when the trial ends, automatically converts into a 12-month paid subscription unless you cancel during the trial; read the terms at Start, and start it only in the test tenant. Source: <https://www.microsoft.com/en-us/security/business/identity-access/microsoft-entra-id> (footnote on the one-month free trial) and SPEC 3.2.
 - Do not invent portal or CLI output. Do not change `main.bicep`.
 
 Required `ANSWER.md` headings (exact lines):

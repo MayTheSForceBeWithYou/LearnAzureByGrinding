@@ -32,6 +32,7 @@ Describe 'a06-e04-customer-managed-key' {
         $n = [string]$ra[0].Name
         $n | Should -Match '\[guid\('
         $n | Should -Not -Match 'newGuid\('
+        $n | Should -Not -Match 'principalId'
         $pt = Get-PropertyValue -Object $ra[0].Resource -Path 'properties.principalType'
         $pt.Found | Should -BeTrue
         "$($pt.Value)" | Should -Match 'ServicePrincipal'

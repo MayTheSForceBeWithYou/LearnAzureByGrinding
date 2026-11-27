@@ -12,7 +12,7 @@ function Invoke-CreateUserAndGroup {
         [string]$DisplayName = 'lagb-pat',
         [string]$UserPrincipalName = 'lagb-pat@lab.example',
         [string]$Password = 'NotARealPassword_0',
-        [string]$JobTitle = 'Lab user',
+        [string]$UpdatedDisplayName = 'lagb-pat-updated',
         [string]$GroupDisplayName = 'lagb-lab-users',
         [string]$GroupMailNickname = 'lagblabusers'
     )
