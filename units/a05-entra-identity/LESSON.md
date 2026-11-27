@@ -1,7 +1,5 @@
 # A05: Microsoft Entra users, groups, and directory access
 
-This lesson exceeds 300 lines because it must address: test-tenant isolation and the expectedEntraTenantId gate; directory switching in both portal and CLI; and Entra Free vs P1 vs P2 licensing distinctions (SSPR, Conditional Access, PIM, dynamic groups). These topics are non-negotiable prerequisites for safe A05 lab work.
-
 ## Advance organizer
 
 You have assigned Azure RBAC roles at resource and subscription scope and enforced Policy at subscription and resource-group scope. This unit teaches Microsoft Entra identity management: creating cloud users and groups, inviting external users, managing user properties and licenses, and understanding the boundary between Entra directory roles and Azure RBAC. After this unit you can create users and groups in a test tenant, explain what SSPR and Conditional Access require, and describe why an Entra directory administrator does not automatically have access to Azure resources.
@@ -212,7 +210,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 ## Check yourself
 
 1. **You are a Global Administrator in your personal Entra tenant. You create a new subscription. You try to create a resource group, and the portal shows "AuthorizationFailed." What must you do?**
-2. **You want to block legacy authentication protocols (protocols that don't support MFA) for all users in your test tenant. Which Entra ID feature do you need?**
+2. **You want to block legacy authentication for all users except the break-glass admin accounts and the service principals used by legacy LOB apps. Which Entra ID feature do you need?**
 3. **You have a security group with 10 members. You assign the Contributor role at resource-group scope to the group. How many Contributor role assignments exist in that resource group?**
 4. **You enable self-service password reset for all users in your test tenant. The tenant is on Entra ID Free. What happens when a user who forgot their password tries to reset it?**
 5. **A user is flagged for risky sign-in behavior (impossible travel, anonymous IP). You want Entra ID to automatically require MFA or block access based on the risk level. Which licensing tier do you need?**
@@ -221,7 +219,7 @@ These are reference, not the reading. The lesson is the reading; the links are w
 <summary>Answers</summary>
 
 1. Elevate your access in the portal (Entra ID → Properties → Access management for Azure resources → toggle to Yes). This grants you the User Access Administrator role at the Azure `/` (root) scope. After elevation, assign yourself Owner or Contributor at subscription scope. Global Administrator in Entra ID does not automatically grant Azure RBAC permissions.
-2. Conditional Access. Blocking legacy authentication is a Conditional Access policy feature, which requires Entra ID P1. The policy targets legacy authentication clients (protocols that do not support modern authentication or MFA) and blocks sign-in. You can test Conditional Access in the test tenant with a P1 trial. See <https://learn.microsoft.com/entra/identity/conditional-access/overview>.
+2. Conditional Access, which requires Entra ID P1. Security defaults (free on every tenant, <https://learn.microsoft.com/entra/fundamentals/security-defaults>) block legacy authentication for all users at no extra cost, but security defaults are all-or-nothing. When you need exceptions (break-glass accounts, service principals, per-app targeting), you need a Conditional Access policy. Conditional Access policies support scoped targeting, exclusions, and conditions. See <https://learn.microsoft.com/entra/identity/conditional-access/overview> and <https://learn.microsoft.com/entra/identity/conditional-access/block-legacy-authentication>.
 3. One. Azure RBAC role assignments are recorded once per principal (the group's object ID), not once per member. All members of the group inherit Contributor access to the resource group. Adding or removing users from the group changes their effective permissions, but the number of role assignments stays the same.
 4. The portal or CLI shows an error or the SSPR experience is unavailable. Self-service password *reset* (the user does not know their current password) requires Entra ID P1. Password *change* (the user knows their current password) works on Free. If you want SSPR, start a P1 trial in the test tenant or use an `[EXPLAIN]` path.
 5. Entra ID P2. Risk-based Conditional Access is an Entra ID Protection feature, which requires P2. Identity Protection detects sign-in and user risks (impossible travel, anonymous IP, leaked credentials, etc.) and can trigger automatic responses through Conditional Access policies. P1 includes Conditional Access but not risk detection. See <https://learn.microsoft.com/entra/id-protection/overview-identity-protection>.
