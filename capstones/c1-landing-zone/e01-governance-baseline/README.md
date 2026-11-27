@@ -26,6 +26,8 @@ From this folder: `pwsh -File ../../../scripts/check.ps1`. That grades *your* wo
 
 Optional and free. **Cost class:** $0 in East US (Policy, RBAC, locks, a resource group, and a Consumption budget do not meter compute).
 
+**While this lab is up, Allowed locations is assigned at subscription scope for East US only.** Creating anything outside East US **anywhere in the subscription** is denied until `down.ps1` runs.
+
 **Teardown:** `pwsh -File ../../../scripts/lab/lab-down.ps1 -Path .`. `down.ps1` removes the lock **before** deleting the group, then removes the assignment, role assignment, budget, and group it created.
 
 Live deploy is `pwsh -File ../../../scripts/lab/lab-up.ps1 -Path .` after `.lab-env.json` exists and the A02 budget is in place. `up.ps1` follows the A02 contract: LabGuard already refused a Deloitte/work tenant; it never runs `az login` or `az account set`; it honours `-WhatIf`; it throws on failure. For a live Reader assignment, replace the placeholder `principalId` up.ps1 passes with an object ID in your personal tenant.
