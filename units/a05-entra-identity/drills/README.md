@@ -10,6 +10,6 @@ Drills have no hints. The starter fails its tests until you write the required c
 
 ## Drills
 
-1. **r01-query-users** — Query users and groups with `az ad user list`, `az ad group list`, and filter by display name or other properties. Target: 4 minutes per rep, 3+ reps on different days.
+1. **r01-query-users** — Query users and groups with `az ad user list`, `az ad group list`, and filter by display name, department, or other properties. Target: about 10 minutes per rep, 3+ reps on different days.
 
-2. **r02-add-group-member** — Add a member to a group via CLI script using `az ad group member add` and verify membership with `az ad group member check`. Target: 4 minutes per rep, 3+ reps on different days.
+2. **r02-add-group-member** — Add a member to a group via CLI script using `az ad group member add` and verify membership with `az ad group member check`. Target: about 10 minutes per rep, 3+ reps on different days.

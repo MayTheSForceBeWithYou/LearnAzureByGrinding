@@ -10,6 +10,6 @@ Drills have no hints. The starter fails its tests until you write the required c
 
 ## Drills
 
-1. **r01-storage-sku-and-kind** — Declare a storage account with a specified SKU (such as `Standard_GRS` or `Premium_LRS`) and kind (`StorageV2`, `BlockBlobStorage`, or `FileStorage`). Target: 3 minutes per rep, 3+ reps on different days.
+1. **r01-storage-sku-and-kind** — Declare a storage account with a specified SKU (such as `Standard_GRS` or `Premium_LRS`) and kind (`StorageV2`, `BlockBlobStorage`, or `FileStorage`). Target: about 10 minutes per rep, 3+ reps on different days.
 
-2. **r02-enable-blob-versioning** — Enable blob versioning and change feed via the `blobServices/default` child resource under a storage account. Target: 3 minutes per rep, 3+ reps on different days.
+2. **r02-enable-blob-versioning** — Enable blob versioning and change feed via the `blobServices/default` child resource under a storage account. Target: about 10 minutes per rep, 3+ reps on different days.
