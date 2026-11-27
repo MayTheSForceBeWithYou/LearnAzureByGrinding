@@ -17,4 +17,5 @@ $rgName = Get-LabResourceGroupName -Prefix $LabEnv.prefix -ExerciseId 'a06-e06-o
 if ($PSCmdlet.ShouldProcess($rgName, 'delete resource group')) {
     $null = Invoke-LabAz -Arguments @('group', 'delete', '--name', $rgName, '--yes', '--no-wait')
 }
-Write-Host "down.ps1: $(if ($WhatIfPreference) { "would tear down '$rgName'" } else { "tore down '$rgName'" }). Soft-deleted storage accounts, if any, can linger; lab-sweep still lists leftovers."
+$confirm = "az group exists --name $rgName"
+Write-Host "down.ps1: $(if ($WhatIfPreference) { "would request teardown of '$rgName'" } else { "teardown of '$rgName' was requested" }) (az group delete --yes --no-wait). Confirm with: $confirm. Soft-deleted storage accounts, if any, can linger; lab-sweep still lists leftovers."

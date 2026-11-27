@@ -36,7 +36,7 @@ Learn also says there is no cost to **configure** object replication (enabling c
 
 **Nothing in this lab is assigned at subscription scope.** While it is up, only the course-tagged resource group is affected. Creating resources in other groups or regions is not denied by this lab.
 
-**Teardown:** `pwsh -File ../../../scripts/lab/lab-down.ps1 -Path .`. `down.ps1` deletes the lab resource group. Soft-deleted storage can linger; `lab-sweep` still lists leftovers.
+**Teardown:** `pwsh -File ../../../scripts/lab/lab-down.ps1 -Path .`. `down.ps1` requests `az group delete --yes --no-wait` (it does not wait for the group to vanish). Confirm with `az group exists --name <rg>`. Soft-deleted storage can linger; `lab-sweep` still lists leftovers.
 
 Live deploy is `pwsh -File ../../../scripts/lab/lab-up.ps1 -Path .` after `.lab-env.json` exists and the A02 budget is in place. `up.ps1` follows the C1 contract: LabGuard already refused a Deloitte/work tenant; it never runs `az login` or `az account set`; it honours `-WhatIf`; it throws on failure. A02's budget must already be in place.
 
