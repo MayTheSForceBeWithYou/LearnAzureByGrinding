@@ -13,10 +13,18 @@ function Add-NamedGroupMember {
 
     # ---- Your resources go below this line. ----
     Assert-LabContext -Scope Entra -LabEnv $LabEnv
-    $users = az ad user list --display-name $UserDisplayName --output json | ConvertFrom-Json
-    $groups = az ad group list --display-name $GroupDisplayName --output json | ConvertFrom-Json
-    $user = @($users)[0]
-    $group = @($groups)[0]
+    $userFilter = "displayName eq '$($UserDisplayName.Replace("'", "''"))'"
+    $groupFilter = "displayName eq '$($GroupDisplayName.Replace("'", "''"))'"
+    $users = @(az ad user list --filter $userFilter --output json | ConvertFrom-Json)
+    if ($users.Count -ne 1) {
+        throw "expected exactly 1 user matching $userFilter, found $($users.Count)"
+    }
+    $groups = @(az ad group list --filter $groupFilter --output json | ConvertFrom-Json)
+    if ($groups.Count -ne 1) {
+        throw "expected exactly 1 group matching $groupFilter, found $($groups.Count)"
+    }
+    $user = $users[0]
+    $group = $groups[0]
     $check = az ad group member check --group $group.id --member-id $user.id --output json | ConvertFrom-Json
     if (-not $check.value) {
         az ad group member add --group $group.id --member-id $user.id | Out-Null

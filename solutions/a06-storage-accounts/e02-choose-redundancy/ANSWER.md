@@ -3,7 +3,7 @@
 Assume no customer-initiated failover. Read and write below are against the account's **normal** endpoint unless a heading names the secondary. Source: <https://learn.microsoft.com/azure/storage/common/storage-redundancy>.
 
 ## LRS zone outage
-read **no**, write **no**. LRS keeps three copies in a single physical datacenter. A zone (or that datacenter) outage takes the only copies offline.
+read **no**, write **no**, **only if the outage hits the zone that holds this account's data**. LRS keeps three copies in a single physical datacenter (one zone). A different zone in the same region can fail and this LRS account still serves. Learn: LRS "replicates your data three times within a single data center in the primary region."
 
 ## LRS region outage
 read **no**, write **no**. LRS has no secondary region. A primary-region outage takes the account down.
@@ -15,7 +15,7 @@ read **yes**, write **yes**. Learn: "your data remains accessible for both read 
 read **no**, write **no**. ZRS is primary-region only. A region-wide outage has no geo copy to fail over to.
 
 ## GRS zone outage
-read **no**, write **no**. GRS uses LRS in the primary region, so a zone/datacenter outage in primary takes the normal endpoint down. The geo copy is not readable or writable until a failover. Learn: "the data in the secondary region isn't available for read or write access unless there's a failover to the secondary region."
+read **no**, write **no** on the normal endpoint, **only if the outage hits the zone that holds the primary copies**. GRS uses LRS in the primary region, so a zone failure elsewhere in that region leaves this account up. The geo copy is not readable or writable until a failover. Learn: "the data in the secondary region isn't available for read or write access unless there's a failover to the secondary region."
 
 ## GRS region outage
 read **no**, write **no** on the normal endpoint. Secondary data is durable but not exposed until failover. No RA, so there is no secondary read endpoint.

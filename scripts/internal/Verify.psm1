@@ -156,6 +156,13 @@ function Test-StarterItem {
         { $_ -eq 'CLI' -and $m.StarterFailsTests } {
             # Same fail-until-worked rule as a CLI/PowerShell drill: the empty script parses,
             # Pester fails, and verify-all reports the expected starter failure (not a skip).
+            # Stop lines / suppressions and (for a .bicep entry) lint/PSRule use the WRITE/DRILL scan.
+            foreach ($f in Get-ChildItem -LiteralPath $Dir -Recurse -File -Include '*.bicep', '*.json', '*.ps1' -Exclude '*.tests.ps1') {
+                if (Select-String -LiteralPath $f.FullName -Pattern '#disable-next-line|#disable-diagnostics|#error' -Quiet) {
+                    $res.Problems.Add("stop line or suppression in $($f.Name) (no #disable-next-line / #disable-diagnostics in a starter)")
+                }
+            }
+            if ($diag) { foreach ($x in @($diag.Text)) { $res.Problems.Add("starter must be lint/PSRule clean: $x") } }
             if (-not $pr) { $res.Problems.Add('StarterFailsTests needs a Pester test that fails until the student writes the commands') }
             elseif (@($pr.Crashes).Count) { $res.Problems.Add("starter harness crashed instead of failing an assertion: $(@($pr.Crashes)[0])") }
             elseif ($pr.Failed -eq 0) { $res.Problems.Add('starter PASSES its tests; a CLI starter with StarterFailsTests must fail until the student does the work') }

@@ -110,7 +110,7 @@ function Test-ExerciseManifest {
     }
     if ($m.ExpectDiagnostics.Count -and $m.PrimaryTag -ne 'BUG') { $p.Add('ExpectDiagnostics is only allowed on BUG') }
     if ($m.Raw.ContainsKey('StarterFailsTests')) {
-        if ($m.PrimaryTag -ne 'CLI') { $p.Add('StarterFailsTests is only allowed on CLI') }
+        if ($m.PrimaryTag -ne 'CLI') { $p.Add('StarterFailsTests is only allowed when the primary tag is CLI') }
         elseif ($m.Raw['StarterFailsTests'] -isnot [bool]) { $p.Add('StarterFailsTests must be $true or $false') }
         elseif ($m.StarterFailsTests -and -not (Test-Path -LiteralPath $testPath -PathType Leaf)) {
             $p.Add("StarterFailsTests needs Test '$($m.Test)' (the starter must fail it until the student writes the commands)")

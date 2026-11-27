@@ -6,4 +6,4 @@
 
 **Alternatives.** RA-GRS is the GRS equivalent of RA-GZRS; the table asked for RA-GZRS.
 
-**The usual mistake.** Treating GRS as readable in the secondary without RA, or answering LRS→ZRS as a `sku.name` change.
+**The usual mistake.** Treating GRS as readable in the secondary without RA, answering LRS→ZRS as a `sku.name` change, or treating every zone outage as taking LRS/GRS down — it is down only if that outage hits the zone holding the account's data.

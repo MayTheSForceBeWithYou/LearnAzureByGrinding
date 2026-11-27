@@ -6,4 +6,4 @@
 
 **Alternatives.** Entra PowerShell `Set-EntraUserLicense` is the same two-step (usage location, then assign). Tests grade `az rest`.
 
-**The usual mistake.** POSTing `assignLicense` before `usageLocation`, or assigning P1 in the personal Default Directory.
+**The usual mistake.** POSTing `assignLicense` before `usageLocation`, or assigning P1 in the personal Default Directory. Passing inline JSON to `az rest --body` loses quotes on Windows (`az` is a `.cmd`); the solution writes a temp file under `[IO.Path]::GetTempPath()` and passes `--body "@$path"`.

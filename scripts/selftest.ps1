@@ -217,7 +217,30 @@ Add-Case 'cli-starter-fails-tests-wrong-tag' {
         $txt = [IO.File]::ReadAllText($p).Replace("Tags           = @('EXPLAIN')", "Tags           = @('EXPLAIN')`n    StarterFailsTests = `$true")
         [IO.File]::WriteAllText($p, $txt)
     }
-} 1 @('StarterFailsTests is only allowed on CLI') -VerifyArgs @('-NoPSRule')
+} 1 @('StarterFailsTests is only allowed when the primary tag is CLI') -VerifyArgs @('-NoPSRule')
+Add-Case 'cli-starter-fails-tests-pass' {
+    # Key cannot go stale: a starter that already passes Pester is rejected even with the key.
+    param($t)
+    Put $t 'cli-drill/solution' "$U/e08-cli-script"; Remove-Item (Join-Path $t "$U/e08-cli-script/NOTES.md") -ErrorAction SilentlyContinue
+    Put $t 'cli-drill/solution' "$S/e08-cli-script"
+    foreach ($side in $U, $S) {
+        $p = Join-Path $t "$side/e08-cli-script/exercise.psd1"
+        $txt = [IO.File]::ReadAllText($p).Replace("Tags          = @('DRILL', 'CLI')", "Tags          = @('CLI')`n    StarterFailsTests = `$true")
+        [IO.File]::WriteAllText($p, $txt)
+    }
+} 1 @('starter PASSES its tests; a CLI starter with StarterFailsTests must fail until the student does the work') -VerifyArgs @('-NoPSRule')
+Add-Case 'cli-starter-fails-tests-solution-fails' {
+    # The key does not relax the solution: an empty script as the solution still fails.
+    param($t)
+    Put $t 'cli-drill/starter' "$U/e08-cli-script"
+    Put $t 'cli-drill/starter' "$S/e08-cli-script"
+    Set-Text $t "$S/e08-cli-script/NOTES.md" "placeholder notes for a failing solution`n"
+    foreach ($side in $U, $S) {
+        $p = Join-Path $t "$side/e08-cli-script/exercise.psd1"
+        $txt = [IO.File]::ReadAllText($p).Replace("Tags          = @('DRILL', 'CLI')", "Tags          = @('CLI')`n    StarterFailsTests = `$true")
+        [IO.File]::WriteAllText($p, $txt)
+    }
+} 1 @('Pester test(s) failed') -VerifyArgs @('-NoPSRule')
 Add-Case 'only-filter-and-mirror' {
     param($t)
     Put $t 'explain/starter' "$U/e04-explain-output"; Put $t 'explain/solution' "$S/e04-explain-output"
