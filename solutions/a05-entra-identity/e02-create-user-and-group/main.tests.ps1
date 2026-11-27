@@ -42,7 +42,7 @@ Describe 'a05-e02-create-user-and-group' {
         Invoke-CreateUserAndGroup -LabEnv $script:LabEnv
         $calls = @(Get-AzMockCalls)
         @($calls | Where-Object { $_ -match '^ad user create\b' }).Count | Should -BeGreaterThan 0
-        @($calls | Where-Object { $_ -match '^ad user update\b' }).Count | Should -BeGreaterThan 0
+        @($calls | Where-Object { $_ -match '^ad user update\b' -and $_ -match '--display-name' }).Count | Should -BeGreaterThan 0
         @($calls | Where-Object { $_ -match '^ad group create\b' }).Count | Should -BeGreaterThan 0
         @($calls | Where-Object { $_ -match '^ad group member add\b' }).Count | Should -BeGreaterThan 0
     }

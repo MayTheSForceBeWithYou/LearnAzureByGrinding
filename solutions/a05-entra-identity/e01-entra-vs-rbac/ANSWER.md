@@ -19,13 +19,13 @@ Entra directory role
 User Administrator is an Entra directory role. It can create and manage cloud users in that tenant, including `lagb-pat@labtenant.onmicrosoft.com`. It does not grant Azure resource-manager actions. Learn: <https://learn.microsoft.com/entra/identity/role-based-access-control/permissions-reference>.
 
 ## Scenario 3 Allowed
-denied
+allowed
 
 ## Scenario 3 System
 neither
 
 ## Scenario 3 Reason
-Contributor at subscription `lagb-personal` is Azure RBAC. Inviting a B2B guest is a directory action (Guest Inviter / User Administrator / similar Entra roles). Contributor does not grant Entra invite. Learn: <https://learn.microsoft.com/azure/role-based-access-control/overview>.
+Contributor at subscription `lagb-personal` is Azure RBAC and does not invite guests. The invite is allowed by Entra's **default** guest-invite settings: Chris is a **member** of the A05 test tenant. Learn: "By default, all users in your organization, including B2B collaboration guest users, can invite external users." Source: <https://learn.microsoft.com/entra/external-id/external-collaboration-settings-configure> (Specify who can invite guests / default).
 
 ## Scenario 4 Allowed
 denied

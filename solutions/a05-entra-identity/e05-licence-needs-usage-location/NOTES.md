@@ -2,7 +2,7 @@
 
 **Why it is correct.** `Assert-LabContext -Scope Entra` first. PATCH `usageLocation` on the user, then POST `assignLicense` with `addLicenses` / `removeLicenses`. Graph requires usage location before a licence: <https://learn.microsoft.com/graph/api/resources/user> and <https://learn.microsoft.com/graph/api/user-assignlicense>.
 
-**Numbers / SKUs.** The test SKU is the all-zero GUID `00000000-0000-0000-0000-0000000000b1`, fake. P1 assignment is trial-in-test-tenant only. <https://learn.microsoft.com/entra/fundamentals/licensing>
+**Numbers / SKUs.** The test SKU is the all-zero GUID `00000000-0000-0000-0000-0000000000b1`, fake. P1 assignment is trial-in-test-tenant only. The one-month P1/P2 trial requires a credit card and auto-converts to a 12-month paid subscription unless cancelled. <https://learn.microsoft.com/entra/fundamentals/licensing>
 
 **Alternatives.** Entra PowerShell `Set-EntraUserLicense` is the same two-step (usage location, then assign). Tests grade `az rest`.
 

@@ -4,7 +4,8 @@ targetScope = 'resourceGroup'
 param location string = resourceGroup().location
 
 @description('Log Analytics workspace resource id for Key Vault AuditEvent logs (Security L1 Azure.KeyVault.Logs).')
-param logAnalyticsWorkspaceId string = resourceId('Microsoft.OperationalInsights/workspaces', 'lagb-a06-e04-logs')
+// Example ID; supply your own workspace
+param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/lagbexample'
 
 @description('Course tags from SPEC 10.2.')
 param tags object = {

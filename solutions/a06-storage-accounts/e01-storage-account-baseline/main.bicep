@@ -19,13 +19,7 @@ output tags object = tags
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: 'lagb${uniqueString(resourceGroup().id, 'e01')}'
   location: location
-  tags: {
-    course: 'LearnAzureByGrinding'
-    unit: 'a06-storage-accounts'
-    exercise: 'a06-e01-storage-account-baseline'
-    owner: 'n8'
-    expires: '2026-12-31T00:00:00Z'
-  }
+  tags: tags
   sku: {
     name: 'Standard_LRS'
   }

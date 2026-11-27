@@ -19,13 +19,7 @@ output tags object = tags
 resource sourceAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: 'lagbsrc${uniqueString(resourceGroup().id, 'src')}'
   location: location
-  tags: {
-    course: 'LearnAzureByGrinding'
-    unit: 'a06-storage-accounts'
-    exercise: 'a06-e06-object-replication'
-    owner: 'n8'
-    expires: '2026-12-31T00:00:00Z'
-  }
+  tags: tags
   sku: {
     name: 'Standard_LRS'
   }
@@ -41,13 +35,7 @@ resource sourceAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
 resource destAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: 'lagbdst${uniqueString(resourceGroup().id, 'dst')}'
   location: location
-  tags: {
-    course: 'LearnAzureByGrinding'
-    unit: 'a06-storage-accounts'
-    exercise: 'a06-e06-object-replication'
-    owner: 'n8'
-    expires: '2026-12-31T00:00:00Z'
-  }
+  tags: tags
   sku: {
     name: 'Standard_LRS'
   }

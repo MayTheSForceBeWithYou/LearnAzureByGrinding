@@ -1,6 +1,6 @@
 # Notes
 
-**Why it is correct.** `sku.name`, `kind`, and `accessTier` bind to parameters. HTTPS, TLS 1.2, no public blobs, no shared key, `lagb-` name.
+**Why it is correct.** `sku.name`, `kind`, and `accessTier` bind to parameters. HTTPS, TLS 1.2, no public blobs, no shared key, `lagb` name (no hyphen).
 
 **Numbers / SKUs.** Defaults `Standard_LRS`, `StorageV2`, `Hot`.
 

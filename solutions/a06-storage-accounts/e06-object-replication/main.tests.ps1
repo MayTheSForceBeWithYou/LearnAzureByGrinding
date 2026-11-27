@@ -21,7 +21,19 @@ Describe 'a06-e06-object-replication' {
             (Get-PropertyValue -Object $a.Resource -Path 'properties.minimumTlsVersion').Value | Should -Be 'TLS1_2'
             (Get-PropertyValue -Object $a.Resource -Path 'properties.allowBlobPublicAccess').Value | Should -BeFalse
             (Get-PropertyValue -Object $a.Resource -Path 'properties.allowSharedKeyAccess').Value | Should -BeFalse
-            (Get-PropertyValue -Object $a.Resource -Path 'tags.course').Value | Should -Be 'LearnAzureByGrinding'
+        }
+        $tagParam = $template.parameters.tags
+        $tagParam | Should -Not -BeNullOrEmpty
+        $tagDefault = $tagParam.defaultValue
+        $tagDefault | Should -Not -BeNullOrEmpty
+        if ($tagDefault -is [System.Collections.IDictionary]) {
+            @($tagDefault.Keys | Where-Object { $_ -ieq 'course' }).Count | Should -Be 1
+        } else {
+            ($tagDefault | ConvertTo-Json -Compress) | Should -Match 'course'
+        }
+        foreach ($a in $st) {
+            $tagsJson = $a.Resource.tags | ConvertTo-Json -Depth 8 -Compress
+            $tagsJson | Should -Match "parameters\('tags'\)"
         }
     }
 
@@ -40,14 +52,16 @@ Describe 'a06-e06-object-replication' {
         $feed.Count | Should -BeGreaterThan 0
     }
 
-    It 'declares containers and object replication policies: destination policyId default first, source uses that policy id' {
+    It 'declares containers and object replication policies: destination default; source policy via a module' {
         $c = @(Get-TemplateResources -Template $template -Type 'Microsoft.Storage/storageAccounts/blobServices/containers')
         $c.Count | Should -BeGreaterThan 1
         $orp = @(Get-TemplateResources -Template $template -Type 'Microsoft.Storage/storageAccounts/objectReplicationPolicies')
         $orp.Count | Should -Be 2
         $names = @($orp | ForEach-Object { [string]$_.Name })
         ($names | Where-Object { $_ -match 'default' }).Count | Should -BeGreaterThan 0
-        ($names | Where-Object { $_ -match 'policyId|objectReplicationPolicies' }).Count | Should -BeGreaterThan 0
+        ($names | Where-Object { $_ -match "parameters\(" }).Count | Should -BeGreaterThan 0
+        $names | Should -Not -Match 'properties\.policyId'
+        @(Get-TemplateResources -Template $template -Type 'Microsoft.Resources/deployments').Count | Should -BeGreaterThan 0
         $raw = ConvertTo-Json $template -Depth 50 -Compress
         $raw | Should -Match 'ruleId'
     }

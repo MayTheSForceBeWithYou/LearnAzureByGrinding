@@ -6,4 +6,4 @@
 
 **Alternatives.** Global Administrator can elevate access to Azure RBAC; that path is the lesson's worked example and is out of scope here.
 
-**The usual mistake.** Treating Contributor or Owner as an Entra role, or treating User Administrator as able to create resource groups.
+**The usual mistake.** Treating Contributor as able to invite guests (it cannot; members can invite under the default Guest invite settings), or treating User Administrator as able to create resource groups.

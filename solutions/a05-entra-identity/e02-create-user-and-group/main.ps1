@@ -12,7 +12,7 @@ function Invoke-CreateUserAndGroup {
         [string]$DisplayName = 'lagb-pat',
         [string]$UserPrincipalName = 'lagb-pat@lab.example',
         [string]$Password = 'NotARealPassword_0',
-        [string]$JobTitle = 'Lab user',
+        [string]$UpdatedDisplayName = 'lagb-pat-updated',
         [string]$GroupDisplayName = 'lagb-lab-users',
         [string]$GroupMailNickname = 'lagblabusers'
     )
@@ -21,7 +21,7 @@ function Invoke-CreateUserAndGroup {
     Assert-LabContext -Scope Entra -LabEnv $LabEnv
     $userJson = az ad user create --display-name $DisplayName --user-principal-name $UserPrincipalName --password $Password --output json
     $user = $userJson | ConvertFrom-Json
-    az ad user update --id $user.id --job-title $JobTitle | Out-Null
+    az ad user update --id $UserPrincipalName --display-name $UpdatedDisplayName | Out-Null
     $groupJson = az ad group create --display-name $GroupDisplayName --mail-nickname $GroupMailNickname --output json
     $group = $groupJson | ConvertFrom-Json
     az ad group member add --group $group.id --member-id $user.id | Out-Null

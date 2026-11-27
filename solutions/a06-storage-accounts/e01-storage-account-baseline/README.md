@@ -11,7 +11,7 @@ Author a general-purpose v2 storage account with the course security defaults an
 - The compiled template contains one `Microsoft.Storage/storageAccounts`.
 - `kind` is `StorageV2`. `sku.name` is `Standard_LRS`.
 - `supportsHttpsTrafficOnly` is true. `minimumTlsVersion` is `TLS1_2`. `allowBlobPublicAccess` is false. `allowSharedKeyAccess` is false.
-- The account name uses the `lagb-` prefix (storage names are 3–24 lowercase letters and numbers; `uniqueString` is allowed).
+- The account name uses the `lagb` prefix (no hyphen: storage names are 3–24 lowercase letters and numbers; `uniqueString` is allowed).
 - Location comes from the `location` parameter. Tags use the `tags` parameter (course set: `course`, `unit`, `exercise`, `expires`, `owner`).
 - Do not add a PSRule suppression.
 

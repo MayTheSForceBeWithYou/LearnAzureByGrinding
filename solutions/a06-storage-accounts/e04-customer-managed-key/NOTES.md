@@ -6,4 +6,4 @@
 
 **Alternatives.** System-assigned identity cannot set CMK at create time. Access policies are the old model; Security L1 wants RBAC (`Azure.KeyVault.RBAC`).
 
-**The usual mistake.** `subscriptionResourceId` for the role definition, `newGuid()` for the assignment name, or turning infrastructure encryption on after create (it is create-time only).
+**The usual mistake.** `subscriptionResourceId` for the role definition, `newGuid()` for the assignment name, putting `principalId` in the `guid()` name (BCP120), or turning infrastructure encryption on after create (it is create-time only). `logAnalyticsWorkspaceId` defaults to a labelled example id; pass a real workspace id for a live lab.

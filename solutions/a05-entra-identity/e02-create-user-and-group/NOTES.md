@@ -1,6 +1,6 @@
 # Notes
 
-**Why it is correct.** `Assert-LabContext -Scope Entra` runs before any `az` call. Then create user, update `jobTitle`, create the security group, add the member. Names stay `lagb-`.
+**Why it is correct.** `Assert-LabContext -Scope Entra` runs before any `az` call. Then create user, `az ad user update --display-name` (that command has no `--job-title`), create the security group, add the member. Names stay `lagb-`.
 
 **Numbers / SKUs.** Free covers create/manage cloud users and groups. <https://learn.microsoft.com/entra/fundamentals/licensing>
 

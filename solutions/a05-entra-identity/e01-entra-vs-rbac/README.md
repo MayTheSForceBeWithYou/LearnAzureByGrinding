@@ -16,7 +16,7 @@ Each row is one person, one role held at one scope, and one action they attempt 
 
 1. **Alex** holds **Storage Account Contributor** at resource group `lagb-a06-lab`. Action: create a StorageV2 account named `lagblabstore01` in that resource group.
 2. **Blair** holds **User Administrator** (Entra directory role) in the A05 test tenant. Action: create a cloud-only user `lagb-pat@labtenant.onmicrosoft.com` in that tenant.
-3. **Chris** holds **Contributor** at subscription `lagb-personal`. Action: invite `guest@example.com` as a B2B guest into the Entra directory.
+3. **Chris** is a **member** user of the A05 test tenant and holds **Contributor** at subscription `lagb-personal`. The tenant uses the **default** Guest invite settings: member users can invite guests. Source: <https://learn.microsoft.com/entra/external-id/external-collaboration-settings-configure> (section **Specify who can invite guests** / default). Action: invite `guest@example.com` as a B2B guest into the Entra directory.
 4. **Dana** holds **Helpdesk Administrator** (Entra directory role) in the A05 test tenant. Action: create resource group `lagb-new` in the lab Azure subscription.
 5. **Evan** holds **Owner** at storage account `lagbstorlab` (the resource, not the subscription). Action: reset the password of another cloud user in the A05 test tenant.
 6. **Fay** holds **Groups Administrator** (Entra directory role) in the A05 test tenant. Action: assign the Azure **Reader** role on resource group `lagb-a06-lab` to Alex.
